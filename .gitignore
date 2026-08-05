@@ -1,0 +1,28 @@
+# Build outputs
+build/
+out/
+dist/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# IDE
+.vscode/
+.idea/
+*.user
+*.suo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets and wallets
+*.dat
+*.wallet
+*.key
+*.pem
+.env
+.env.*
