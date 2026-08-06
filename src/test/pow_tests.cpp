@@ -28,7 +28,7 @@ BOOST_AUTO_TEST_CASE(get_next_work)
     // CalculateNextWorkRequired(); redoing the calculation here would be just
     // reimplementing the same code that is written in pow.cpp. Rather than
     // copy that code, we just hardcode the expected result.
-    unsigned int expected_nbits = 0x1d00d86aU;
+    unsigned int expected_nbits = 0x1d00ffffU;
     BOOST_CHECK_EQUAL(CalculateNextWorkRequired(&pindexLast, nLastRetargetTime, chainParams->GetConsensus()), expected_nbits);
     BOOST_CHECK(PermittedDifficultyTransition(chainParams->GetConsensus(), pindexLast.nHeight+1, pindexLast.nBits, expected_nbits));
 }
@@ -51,17 +51,38 @@ BOOST_AUTO_TEST_CASE(get_next_work_pow_limit)
 BOOST_AUTO_TEST_CASE(get_next_work_lower_limit_actual)
 {
     const auto chainParams = CreateChainParams(*m_node.args, ChainType::MAIN);
-    int64_t nLastRetargetTime = 1279008237; // Block #66528
+    const auto& consensus = chainParams->GetConsensus();
+
     CBlockIndex pindexLast;
     pindexLast.nHeight = 68543;
-    pindexLast.nTime = 1279297671;  // Block #68543
+    pindexLast.nTime = 1279297671;
     pindexLast.nBits = 0x1c05a3f4;
+
+    // Make the observed timespan one second shorter than the permitted minimum,
+    // forcing CalculateNextWorkRequired() to clamp it to target_timespan / 4.
+    const int64_t nLastRetargetTime =
+        pindexLast.nTime - consensus.nPowTargetTimespan / 4 + 1;
+
     unsigned int expected_nbits = 0x1c0168fdU;
-    BOOST_CHECK_EQUAL(CalculateNextWorkRequired(&pindexLast, nLastRetargetTime, chainParams->GetConsensus()), expected_nbits);
-    BOOST_CHECK(PermittedDifficultyTransition(chainParams->GetConsensus(), pindexLast.nHeight+1, pindexLast.nBits, expected_nbits));
-    // Test that reducing nbits further would not be a PermittedDifficultyTransition.
-    unsigned int invalid_nbits = expected_nbits-1;
-    BOOST_CHECK(!PermittedDifficultyTransition(chainParams->GetConsensus(), pindexLast.nHeight+1, pindexLast.nBits, invalid_nbits));
+    BOOST_CHECK_EQUAL(
+        CalculateNextWorkRequired(&pindexLast, nLastRetargetTime, consensus),
+        expected_nbits
+    );
+    BOOST_CHECK(PermittedDifficultyTransition(
+        consensus,
+        pindexLast.nHeight + 1,
+        pindexLast.nBits,
+        expected_nbits
+    ));
+
+    // A still-harder target must exceed the permitted adjustment limit.
+    unsigned int invalid_nbits = expected_nbits - 1;
+    BOOST_CHECK(!PermittedDifficultyTransition(
+        consensus,
+        pindexLast.nHeight + 1,
+        pindexLast.nBits,
+        invalid_nbits
+    ));
 }
 
 /* Test the constraint on the upper bound for actual time taken */
@@ -186,6 +207,13 @@ void sanity_check_chainparams(const ArgsManager& args, ChainType chain_type)
 
 BOOST_AUTO_TEST_CASE(ChainParams_MAIN_sanity)
 {
+    const auto chain_params = CreateChainParams(*m_node.args, ChainType::MAIN);
+    const auto& consensus = chain_params->GetConsensus();
+
+    BOOST_CHECK_EQUAL(consensus.nPowTargetSpacing, 180);
+    BOOST_CHECK_EQUAL(consensus.nPowTargetTimespan, 362880);
+    BOOST_CHECK_EQUAL(consensus.DifficultyAdjustmentInterval(), 2016);
+
     sanity_check_chainparams(*m_node.args, ChainType::MAIN);
 }
 
