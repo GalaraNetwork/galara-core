@@ -159,6 +159,7 @@ if(ENABLE_WALLET)
       init/bitcoin-wallet.cpp
       wallet/wallettool.cpp
     )
+    set_target_properties(bitcoin-wallet PROPERTIES OUTPUT_NAME "galara-wallet")
     add_windows_resources(bitcoin-wallet bitcoin-wallet-res.rc)
     add_windows_application_manifest(bitcoin-wallet)
     target_link_libraries(bitcoin-wallet
@@ -310,6 +311,7 @@ if(BUILD_DAEMON)
     bitcoind.cpp
     init/bitcoind.cpp
   )
+  set_target_properties(bitcoind PROPERTIES OUTPUT_NAME "galarad")
   add_windows_resources(bitcoind bitcoind-res.rc)
   add_windows_application_manifest(bitcoind)
   target_link_libraries(bitcoind
@@ -348,6 +350,7 @@ target_link_libraries(bitcoin_cli
 # Bitcoin Core RPC client
 if(BUILD_CLI)
   add_executable(bitcoin-cli bitcoin-cli.cpp)
+  set_target_properties(bitcoin-cli PROPERTIES OUTPUT_NAME "galara-cli")
   add_windows_resources(bitcoin-cli bitcoin-cli-res.rc)
   add_windows_application_manifest(bitcoin-cli)
   target_link_libraries(bitcoin-cli
@@ -364,6 +367,7 @@ endif()
 
 if(BUILD_TX)
   add_executable(bitcoin-tx bitcoin-tx.cpp)
+  set_target_properties(bitcoin-tx PROPERTIES OUTPUT_NAME "galara-tx")
   add_windows_resources(bitcoin-tx bitcoin-tx-res.rc)
   add_windows_application_manifest(bitcoin-tx)
   target_link_libraries(bitcoin-tx
@@ -378,6 +382,7 @@ endif()
 
 if(BUILD_UTIL)
   add_executable(bitcoin-util bitcoin-util.cpp)
+  set_target_properties(bitcoin-util PROPERTIES OUTPUT_NAME "galara-util")
   add_windows_resources(bitcoin-util bitcoin-util-res.rc)
   add_windows_application_manifest(bitcoin-util)
   target_link_libraries(bitcoin-util
