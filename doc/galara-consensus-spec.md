@@ -146,11 +146,11 @@ script, initial difficulty, and network identity values are final.
 |---|---|
 | Default P2P port | 29471 |
 | Default RPC port | 29472 |
-| Message-start bytes | TBD |
+| Message-start bytes | `30 b8 e8 52` |
 | Base58 public-key address prefix | TBD |
 | Base58 script address prefix | TBD |
 | Base58 private-key prefix | TBD |
-| Bech32 HRP | TBD |
+| Bech32 HRP | `glra` |
 | Extended public-key prefix | TBD |
 | Extended private-key prefix | TBD |
 
@@ -160,9 +160,9 @@ script, initial difficulty, and network identity values are final.
 |---|---|
 | Default P2P port | 39471 |
 | Default RPC port | 39472 |
-| Message-start bytes | TBD |
+| Message-start bytes | `47 b2 ad c9` |
 | Base58 address prefixes | TBD |
-| Bech32 HRP | TBD |
+| Bech32 HRP | `tglra` |
 
 ### Regtest
 
@@ -170,11 +170,16 @@ script, initial difficulty, and network identity values are final.
 |---|---|
 | Default P2P port | 49471 |
 | Default RPC port | 49472 |
-| Message-start bytes | TBD |
-| Bech32 HRP | TBD |
+| Message-start bytes | `7f 1b 68 3c` |
+| Bech32 HRP | `rglra` |
 
 Every message-start sequence must be distinct from Bitcoin and from known
 networks likely to run on the same machines.
+
+The selected message-start values were deterministically derived from the
+SHA-256 hashes of the labels `Galara mainnet`, `Galara testnet`, and
+`Galara regtest`. They are distinct from each other and from the inherited
+Bitcoin network values reviewed in the source tree.
 
 Ports should avoid conflicts with Bitcoin Core and other projects associated
 with the Galara community.
