@@ -144,8 +144,8 @@ script, initial difficulty, and network identity values are final.
 
 | Property | Value |
 |---|---|
-| Default P2P port | TBD |
-| Default RPC port | TBD |
+| Default P2P port | 29471 |
+| Default RPC port | 29472 |
 | Message-start bytes | TBD |
 | Base58 public-key address prefix | TBD |
 | Base58 script address prefix | TBD |
@@ -158,8 +158,8 @@ script, initial difficulty, and network identity values are final.
 
 | Property | Value |
 |---|---|
-| Default P2P port | TBD |
-| Default RPC port | TBD |
+| Default P2P port | 39471 |
+| Default RPC port | 39472 |
 | Message-start bytes | TBD |
 | Base58 address prefixes | TBD |
 | Bech32 HRP | TBD |
@@ -168,8 +168,8 @@ script, initial difficulty, and network identity values are final.
 
 | Property | Value |
 |---|---|
-| Default P2P port | TBD |
-| Default RPC port | TBD |
+| Default P2P port | 49471 |
+| Default RPC port | 49472 |
 | Message-start bytes | TBD |
 | Bech32 HRP | TBD |
 
@@ -178,6 +178,9 @@ networks likely to run on the same machines.
 
 Ports should avoid conflicts with Bitcoin Core and other projects associated
 with the Galara community.
+
+The selected Galara ports were checked against the source repository, active
+local listeners, and `/etc/services`. No direct conflicts were found.
 
 ## 8. Address format goals
 
