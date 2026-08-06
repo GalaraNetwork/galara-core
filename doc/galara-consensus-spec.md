@@ -147,9 +147,9 @@ script, initial difficulty, and network identity values are final.
 | Default P2P port | 29471 |
 | Default RPC port | 29472 |
 | Message-start bytes | `30 b8 e8 52` |
-| Base58 public-key address prefix | TBD |
-| Base58 script address prefix | TBD |
-| Base58 private-key prefix | TBD |
+| Base58 public-key address prefix | 38 (`0x26`), producing `G...` |
+| Base58 script address prefix | 97 (`0x61`), producing `g...` |
+| Base58 private-key prefix | 150 (`0x96`), producing compressed WIF `P...` |
 | Bech32 HRP | `glra` |
 | Extended public-key prefix | TBD |
 | Extended private-key prefix | TBD |
@@ -200,7 +200,17 @@ Desired properties:
 - Extended keys should not be confused with Bitcoin xpub or xprv keys unless
   deliberate compatibility is chosen and clearly documented.
 
-Final prefix values are **TBD**.
+Mainnet Base58 prefixes were selected by generating Base58Check examples
+across multiple payloads and private keys.
+
+The selected mainnet visual identity is:
+
+- Legacy public-key addresses: `G...`
+- Legacy script addresses: `g...`
+- Native SegWit addresses: `glra1...`
+- Compressed private-key WIF: `P...`
+
+Testnet, regtest, and extended-key prefixes remain **TBD**.
 
 ## 9. Consensus deployments and activations
 
