@@ -39,7 +39,7 @@ class SettingsTest(BitcoinTestFramework):
 
     def run_test(self):
         node, = self.nodes
-        settings = node.chain_path / "settings.json"
+        settings = node.chain_path / "galara-settings.json"
         conf = node.datadir_path / "bitcoin.conf"
 
         # Assert default settings file was created

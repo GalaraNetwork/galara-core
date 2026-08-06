@@ -174,7 +174,7 @@ class BackwardsCompatibilityTest(BitcoinTestFramework):
         legacy_wallet.unloadwallet()
 
         # Write wallet so it is automatically loaded during init
-        settings_path = node_master.chain_path / "settings.json"
+        settings_path = node_master.chain_path / "galara-settings.json"
         with settings_path.open("w") as fp:
             json.dump({"wallet": [wallet_name]}, fp)
 

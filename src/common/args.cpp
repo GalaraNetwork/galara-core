@@ -35,7 +35,7 @@
 #include <variant>
 
 const char * const BITCOIN_CONF_FILENAME = "galara.conf";
-const char * const BITCOIN_SETTINGS_FILENAME = "settings.json";
+const char * const BITCOIN_SETTINGS_FILENAME = "galara-settings.json";
 
 ArgsManager gArgs;
 
