@@ -161,7 +161,9 @@ script, initial difficulty, and network identity values are final.
 | Default P2P port | 39471 |
 | Default RPC port | 39472 |
 | Message-start bytes | `47 b2 ad c9` |
-| Base58 address prefixes | TBD |
+| Base58 public-key address prefix | 65 (`0x41`), producing `T...` |
+| Base58 script address prefix | 127 (`0x7f`), producing `t...` |
+| Base58 private-key prefix | 183 (`0xb7`), producing compressed WIF `U...` |
 | Bech32 HRP | `tglra` |
 
 ### Regtest
@@ -171,6 +173,9 @@ script, initial difficulty, and network identity values are final.
 | Default P2P port | 49471 |
 | Default RPC port | 49472 |
 | Message-start bytes | `7f 1b 68 3c` |
+| Base58 public-key address prefix | 65 (`0x41`), producing `T...` |
+| Base58 script address prefix | 127 (`0x7f`), producing `t...` |
+| Base58 private-key prefix | 163 (`0xa3`), producing compressed WIF `R...` |
 | Bech32 HRP | `rglra` |
 
 Every message-start sequence must be distinct from Bitcoin and from known
@@ -210,7 +215,7 @@ The selected mainnet visual identity is:
 - Native SegWit addresses: `glra1...`
 - Compressed private-key WIF: `P...`
 
-Testnet, regtest, and extended-key prefixes remain **TBD**.
+Extended public/private key prefixes remain **TBD**.
 
 ## 9. Consensus deployments and activations
 
