@@ -151,8 +151,8 @@ script, initial difficulty, and network identity values are final.
 | Base58 script address prefix | 97 (`0x61`), producing `g...` |
 | Base58 private-key prefix | 150 (`0x96`), producing compressed WIF `P...` |
 | Bech32 HRP | `glra` |
-| Extended public-key prefix | TBD |
-| Extended private-key prefix | TBD |
+| Extended public-key prefix | `01 49 0a ff` (`0x01490aff`), producing `Gpub...` |
+| Extended private-key prefix | `01 49 06 c5` (`0x014906c5`), producing `Gprv...` |
 
 ### Testnet
 
@@ -165,6 +165,8 @@ script, initial difficulty, and network identity values are final.
 | Base58 script address prefix | 127 (`0x7f`), producing `t...` |
 | Base58 private-key prefix | 183 (`0xb7`), producing compressed WIF `U...` |
 | Bech32 HRP | `tglra` |
+| Extended public-key prefix | `02 2d bf 5b` (`0x022dbf5b`), producing `Tpub...` |
+| Extended private-key prefix | `02 2d bb 21` (`0x022dbb21`), producing `Tprv...` |
 
 ### Regtest
 
@@ -177,6 +179,8 @@ script, initial difficulty, and network identity values are final.
 | Base58 script address prefix | 127 (`0x7f`), producing `t...` |
 | Base58 private-key prefix | 163 (`0xa3`), producing compressed WIF `R...` |
 | Bech32 HRP | `rglra` |
+| Extended public-key prefix | `02 2d bf 5b` (`0x022dbf5b`), producing `Tpub...` |
+| Extended private-key prefix | `02 2d bb 21` (`0x022dbb21`), producing `Tprv...` |
 
 Every message-start sequence must be distinct from Bitcoin and from known
 networks likely to run on the same machines.
@@ -215,7 +219,19 @@ The selected mainnet visual identity is:
 - Native SegWit addresses: `glra1...`
 - Compressed private-key WIF: `P...`
 
-Extended public/private key prefixes remain **TBD**.
+Extended-key prefixes were selected by calculating the four-byte Base58Check
+version ranges capable of producing stable, network-specific prefixes across
+multiple serialized extended-key payloads.
+
+The selected extended-key identity is:
+
+- Mainnet public extended keys: `Gpub...`
+- Mainnet private extended keys: `Gprv...`
+- Testnet and regtest public extended keys: `Tpub...`
+- Testnet and regtest private extended keys: `Tprv...`
+
+Regtest deliberately shares its extended-key versions with testnet, while its
+ports, message-start bytes, Bech32 HRP, and chain data remain separate.
 
 ## 9. Consensus deployments and activations
 
