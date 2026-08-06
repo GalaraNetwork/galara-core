@@ -122,11 +122,11 @@ public:
          * The characters are rarely used upper ASCII, not valid as UTF-8, and produce
          * a large 32-bit integer with any alignment.
          */
-        pchMessageStart[0] = 0xf9;
-        pchMessageStart[1] = 0xbe;
-        pchMessageStart[2] = 0xb4;
-        pchMessageStart[3] = 0xd9;
-        nDefaultPort = 8333;
+        pchMessageStart[0] = 0x30;
+        pchMessageStart[1] = 0xb8;
+        pchMessageStart[2] = 0xe8;
+        pchMessageStart[3] = 0x52;
+        nDefaultPort = 29471;
         nPruneAfterHeight = 100000;
         m_assumed_blockchain_size = 856;
         m_assumed_chain_state_size = 14;
@@ -150,13 +150,13 @@ public:
         vSeeds.emplace_back("seed.bitcoin.wiz.biz."); // Jason Maurice
         vSeeds.emplace_back("seed.mainnet.achownodes.xyz."); // Ava Chow, only supports x1, x5, x9, x49, x809, x849, xd, x400, x404, x408, x448, xc08, xc48, x40c
 
-        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,0);
-        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,5);
-        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,128);
-        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x88, 0xB2, 0x1E};
-        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x88, 0xAD, 0xE4};
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,38);
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,97);
+        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,150);
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x01, 0x49, 0x0a, 0xff};
+        base58Prefixes[EXT_SECRET_KEY] = {0x01, 0x49, 0x06, 0xc5};
 
-        bech32_hrp = "bc";
+        bech32_hrp = "glra";
 
         vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
 
@@ -248,11 +248,11 @@ public:
         consensus.nMinimumChainWork = uint256{"0000000000000000000000000000000000000000000017dde1c649f3708d14b6"};
         consensus.defaultAssumeValid = uint256{"000000007a61e4230b28ac5cb6b5e5a0130de37ac1faf2f8987d2fa6505b67f4"}; // 4842348
 
-        pchMessageStart[0] = 0x0b;
-        pchMessageStart[1] = 0x11;
-        pchMessageStart[2] = 0x09;
-        pchMessageStart[3] = 0x07;
-        nDefaultPort = 18333;
+        pchMessageStart[0] = 0x47;
+        pchMessageStart[1] = 0xb2;
+        pchMessageStart[2] = 0xad;
+        pchMessageStart[3] = 0xc9;
+        nDefaultPort = 39471;
         nPruneAfterHeight = 1000;
         m_assumed_blockchain_size = 245;
         m_assumed_chain_state_size = 19;
@@ -271,13 +271,13 @@ public:
         vSeeds.emplace_back("testnet-seed.bluematt.me."); // Just a static list of stable node(s), only supports x9
         vSeeds.emplace_back("seed.testnet.achownodes.xyz."); // Ava Chow, only supports x1, x5, x9, x49, x809, x849, xd, x400, x404, x408, x448, xc08, xc48, x40c
 
-        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,111);
-        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,196);
-        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,239);
-        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
-        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,65);
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,127);
+        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,183);
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x02, 0x2d, 0xbf, 0x5b};
+        base58Prefixes[EXT_SECRET_KEY] = {0x02, 0x2d, 0xbb, 0x21};
 
-        bech32_hrp = "tb";
+        bech32_hrp = "tglra";
 
         vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_test), std::end(chainparams_seed_test));
 
@@ -596,11 +596,11 @@ public:
         consensus.nMinimumChainWork = uint256{};
         consensus.defaultAssumeValid = uint256{};
 
-        pchMessageStart[0] = 0xfa;
-        pchMessageStart[1] = 0xbf;
-        pchMessageStart[2] = 0xb5;
-        pchMessageStart[3] = 0xda;
-        nDefaultPort = 18444;
+        pchMessageStart[0] = 0x7f;
+        pchMessageStart[1] = 0x1b;
+        pchMessageStart[2] = 0x68;
+        pchMessageStart[3] = 0x3c;
+        nDefaultPort = 49471;
         nPruneAfterHeight = opts.fastprune ? 100 : 1000;
         m_assumed_blockchain_size = 0;
         m_assumed_chain_state_size = 0;
@@ -672,13 +672,13 @@ public:
             .dTxRate = 0.001, // Set a non-zero rate to make it testable
         };
 
-        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,111);
-        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,196);
-        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,239);
-        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
-        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,65);
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,127);
+        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,163);
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x02, 0x2d, 0xbf, 0x5b};
+        base58Prefixes[EXT_SECRET_KEY] = {0x02, 0x2d, 0xbb, 0x21};
 
-        bech32_hrp = "bcrt";
+        bech32_hrp = "rglra";
 
         // Copied from Testnet4.
         m_headers_sync_params = HeadersSyncParams{

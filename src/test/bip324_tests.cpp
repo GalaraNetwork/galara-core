@@ -21,6 +21,10 @@
 
 namespace {
 
+static constexpr std::array<unsigned char, 4> BITCOIN_MAINNET_MAGIC{
+    0xf9, 0xbe, 0xb4, 0xd9
+};
+
 struct BIP324Test : BasicTestingSetup {
 void TestBIP324PacketVector(
     uint32_t in_idx,
@@ -60,7 +64,10 @@ void TestBIP324PacketVector(
     BIP324Cipher cipher(key, ellswift_ours);
     BOOST_CHECK(!cipher);
     BOOST_CHECK(cipher.GetOurPubKey() == ellswift_ours);
-    cipher.Initialize(ellswift_theirs, in_initiating);
+    cipher.InitializeWithMagic(
+        ellswift_theirs,
+        in_initiating,
+        BITCOIN_MAINNET_MAGIC);
     BOOST_CHECK(cipher);
 
     // Compare session variables.
@@ -107,7 +114,11 @@ void TestBIP324PacketVector(
         BIP324Cipher dec_cipher(key, ellswift_ours);
         BOOST_CHECK(!dec_cipher);
         BOOST_CHECK(dec_cipher.GetOurPubKey() == ellswift_ours);
-        dec_cipher.Initialize(ellswift_theirs, (error == 1) ^ in_initiating, /*self_decrypt=*/true);
+        dec_cipher.InitializeWithMagic(
+            ellswift_theirs,
+            (error == 1) ^ in_initiating,
+            BITCOIN_MAINNET_MAGIC,
+            /*self_decrypt=*/true);
         BOOST_CHECK(dec_cipher);
 
         // Compare session variables.
@@ -164,9 +175,8 @@ void TestBIP324PacketVector(
 BOOST_FIXTURE_TEST_SUITE(bip324_tests, BIP324Test)
 
 BOOST_AUTO_TEST_CASE(packet_test_vectors) {
-    // BIP324 key derivation uses network magic in the HKDF process. We use mainnet params here
-    // as that is what the test vectors are written for.
-    SelectParams(ChainType::MAIN);
+    // These are the official Bitcoin BIP324 packet vectors. Their HKDF salt
+    // uses Bitcoin mainnet magic, supplied explicitly by this test.
 
     // The test vectors are converted using the following Python code in the BIP bip-0324/ directory:
     //
