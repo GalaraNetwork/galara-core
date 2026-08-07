@@ -128,10 +128,22 @@ public:
         m_assumed_blockchain_size = 0;
         m_assumed_chain_state_size = 0;
 
-        genesis = CreateGenesisBlock(1231006505, 2083236893, 0x1d00ffff, 1, 50 * COIN);
+        const char* galara_genesis_msg =
+            "06/Aug/2026 Galara Network - A new chain begins";
+        const CScript galara_genesis_script = CScript() << OP_RETURN;
+
+        genesis = CreateGenesisBlock(
+            galara_genesis_msg,
+            galara_genesis_script,
+            1786062300,
+            1047001877,
+            0x1d00ffff,
+            1,
+            50 * COIN);
+
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256{"000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"});
-        assert(genesis.hashMerkleRoot == uint256{"4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"});
+        assert(consensus.hashGenesisBlock == uint256{"000000001c00b80243bd1bcfd7a4ee9711707bfd4bd3bbd292792ec87538dff3"});
+        assert(genesis.hashMerkleRoot == uint256{"196a88852b529de6fa784c49e0c53b7985d2a0437475a59aefde952e2c026303"});
 
         // Note that of those which support the service bits prefix, most only support a subset of
         // possible options.

@@ -11,6 +11,8 @@
 #include <util/chaintype.h>
 
 #include <boost/test/unit_test.hpp>
+#include <cstdint>
+#include <vector>
 
 BOOST_FIXTURE_TEST_SUITE(pow_tests, BasicTestingSetup)
 
