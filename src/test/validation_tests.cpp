@@ -57,6 +57,13 @@ BOOST_AUTO_TEST_CASE(block_subsidy_test)
     BOOST_CHECK_EQUAL(GetBlockSubsidy(1401599, consensus), 25 * COIN);
     BOOST_CHECK_EQUAL(GetBlockSubsidy(1401600, consensus), 1250000000);
 
+    // Galara's premine is a separate, one-time issuance at block 1.
+    BOOST_CHECK_EQUAL(consensus.nPremineHeight, 1);
+    BOOST_CHECK_EQUAL(consensus.nPremineAmount, 700800 * COIN);
+    BOOST_CHECK_EQUAL(GetPremineAmount(0, consensus), 0);
+    BOOST_CHECK_EQUAL(GetPremineAmount(1, consensus), 700800 * COIN);
+    BOOST_CHECK_EQUAL(GetPremineAmount(2, consensus), 0);
+
     TestBlockSubsidyHalvings(consensus); // Galara mainnet
     TestBlockSubsidyHalvings(150); // As in regtest
     TestBlockSubsidyHalvings(1000); // Just another interval

@@ -1853,6 +1853,16 @@ CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
     return nSubsidy;
 }
 
+CAmount GetPremineAmount(int nHeight, const Consensus::Params& consensusParams)
+{
+    if (consensusParams.nPremineAmount <= 0 ||
+        nHeight != consensusParams.nPremineHeight) {
+        return 0;
+    }
+
+    return consensusParams.nPremineAmount;
+}
+
 CoinsViews::CoinsViews(DBParams db_params, CoinsViewOptions options)
     : m_dbview{std::move(db_params), std::move(options)},
       m_catcherview(&m_dbview) {}
