@@ -964,6 +964,21 @@ BOOST_FIXTURE_TEST_CASE(galara_block1_premine, GalaraMainnetMiningSetup)
     BOOST_CHECK_EQUAL(treasury_count, 1);
     BOOST_CHECK_EQUAL(GetPremineAmount(1, consensus), 700800 * COIN);
 
+    // The correctly constructed Galara block 1 must pass contextual block
+    // validation when proof of work is excluded from this unit test.
+    {
+        CBlock valid_block{good_block};
+        valid_block.hashMerkleRoot = BlockMerkleRoot(valid_block);
+
+        const BlockValidationState state = TestBlockValidity(
+            m_node.chainman->ActiveChainstate(),
+            valid_block,
+            /*check_pow=*/false,
+            /*check_merkle_root=*/true);
+
+        BOOST_CHECK_MESSAGE(state.IsValid(), state.ToString());
+    }
+
     // Missing treasury output must fail.
     {
         CBlock block{good_block};
@@ -1058,11 +1073,11 @@ BOOST_FIXTURE_TEST_CASE(galara_block1_premine, GalaraMainnetMiningSetup)
 
         const BlockValidationState state = TestBlockValidity(
             m_node.chainman->ActiveChainstate(),
-            block,
-            /*check_pow=*/false,
+            block,            /*check_pow=*/false,
             /*check_merkle_root=*/false);
         BOOST_CHECK(!state.IsValid());
     }
 }
+
 
 BOOST_AUTO_TEST_SUITE_END()
