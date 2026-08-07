@@ -204,6 +204,12 @@ bool PermittedDifficultyTransition(const Consensus::Params& params, int64_t heig
 {
     if (params.fPowAllowMinDifficultyBlocks) return true;
 
+    // Galara mainnet intentionally transitions from the historical genesis
+    // target to its dedicated live-mining target at block 1.
+    if (params.nInitialPowBits != 0 && height == 1) {
+        return new_nbits == params.nInitialPowBits;
+    }
+
     if (params.nASERTHalfLife > 0 &&
         height >= params.nASERTActivationHeight) {
         return DeriveTarget(new_nbits, params.powLimit).has_value();

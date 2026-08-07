@@ -368,6 +368,21 @@ BOOST_AUTO_TEST_CASE(galara_asert_activation)
     BOOST_CHECK_EQUAL(block1_bits, consensus.nInitialPowBits);
     BOOST_CHECK_EQUAL(block1_bits, 0x1b014f8aU);
 
+    // Headers presync must allow exactly Galara's dedicated block-1 target,
+    // despite it intentionally differing from the historical genesis target.
+    BOOST_CHECK(PermittedDifficultyTransition(
+        consensus,
+        1,
+        genesis.nBits,
+        consensus.nInitialPowBits));
+
+    // Any other block-1 target must remain forbidden.
+    BOOST_CHECK(!PermittedDifficultyTransition(
+        consensus,
+        1,
+        genesis.nBits,
+        genesis.nBits));
+
     // Build an ideal block 1 index and calculate block 2.
     CBlockIndex block1_index{block1};
     block1_index.pprev = &genesis_index;
