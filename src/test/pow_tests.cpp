@@ -205,6 +205,65 @@ void sanity_check_chainparams(const ArgsManager& args, ChainType chain_type)
     }
 }
 
+BOOST_AUTO_TEST_CASE(galara_asert_calculation)
+{
+    const auto chain_params = CreateChainParams(*m_node.args, ChainType::MAIN);
+    const auto& consensus = chain_params->GetConsensus();
+
+    BOOST_CHECK_EQUAL(consensus.nPowTargetSpacing, 180);
+    BOOST_CHECK_EQUAL(consensus.nASERTHalfLife, 172800);
+
+    const arith_uint256 pow_limit = UintToArith256(consensus.powLimit);
+    const arith_uint256 initial_target = pow_limit >> 4;
+
+    // Anchor parent is one ideal block interval before the anchor.
+    const int64_t parent_time_diff = consensus.nPowTargetSpacing;
+
+    // Exactly on schedule: target remains unchanged.
+    arith_uint256 target = CalculateASERT(
+        initial_target,
+        consensus.nPowTargetSpacing,
+        parent_time_diff + consensus.nPowTargetSpacing,
+        1,
+        pow_limit,
+        consensus.nASERTHalfLife);
+    BOOST_CHECK(target == initial_target);
+
+    // Two days behind schedule: target doubles (difficulty halves).
+    target = CalculateASERT(
+        initial_target,
+        consensus.nPowTargetSpacing,
+        parent_time_diff +
+            2 * consensus.nPowTargetSpacing +
+            consensus.nASERTHalfLife,
+        2,
+        pow_limit,
+        consensus.nASERTHalfLife);
+    BOOST_CHECK(target == initial_target * 2);
+
+    // Two days ahead of schedule: target halves (difficulty doubles).
+    target = CalculateASERT(
+        initial_target,
+        consensus.nPowTargetSpacing,
+        parent_time_diff +
+            2 * consensus.nPowTargetSpacing -
+            consensus.nASERTHalfLife,
+        2,
+        pow_limit,
+        consensus.nASERTHalfLife);
+    BOOST_CHECK(target == initial_target / 2);
+
+    // The target must never become easier than the proof-of-work limit.
+    target = CalculateASERT(
+        pow_limit,
+        consensus.nPowTargetSpacing,
+        parent_time_diff + consensus.nASERTHalfLife * 512,
+        0,
+        pow_limit,
+        consensus.nASERTHalfLife);
+    BOOST_CHECK(target == pow_limit);
+}
+
 BOOST_AUTO_TEST_CASE(ChainParams_MAIN_sanity)
 {
     const auto chain_params = CreateChainParams(*m_node.args, ChainType::MAIN);

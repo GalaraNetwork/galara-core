@@ -96,6 +96,7 @@ public:
         consensus.powLimit = uint256{"00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
         consensus.nPowTargetTimespan = 2016 * 3 * 60; // 2,016 blocks at 3 minutes
         consensus.nPowTargetSpacing = 3 * 60;
+        consensus.nASERTHalfLife = 2 * 24 * 60 * 60; // two days
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.enforce_BIP94 = false;
         consensus.fPowNoRetargeting = false;

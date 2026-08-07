@@ -11,6 +11,73 @@
 #include <uint256.h>
 #include <util/check.h>
 
+#include <cstdlib>
+
+arith_uint256 CalculateASERT(
+    const arith_uint256& ref_target,
+    int64_t target_spacing,
+    int64_t time_diff,
+    int64_t height_diff,
+    const arith_uint256& pow_limit,
+    int64_t half_life)
+{
+    assert(ref_target > 0 && ref_target <= pow_limit);
+    assert((pow_limit >> 224) == 0);
+    assert(height_diff >= 0);
+    assert(half_life > 0);
+
+    // ASERT fixed-point exponent, with 16 fractional bits.
+    assert(std::llabs(time_diff - target_spacing * height_diff) <
+           (int64_t{1} << (63 - 16)));
+
+    const int64_t exponent =
+        ((time_diff - target_spacing * (height_diff + 1)) * 65536) /
+        half_life;
+
+    static_assert((int64_t{-1} >> 1) == int64_t{-1},
+                  "ASERT requires arithmetic right shifts");
+
+    int64_t shifts = exponent >> 16;
+    const uint16_t frac = static_cast<uint16_t>(exponent);
+
+    assert(exponent == shifts * 65536 + frac);
+
+    // Cubic fixed-point approximation of 2^x for 0 <= x < 1.
+    const uint32_t factor =
+        65536 +
+        ((195766423245049ULL * frac +
+          971821376ULL * frac * frac +
+          5127ULL * frac * frac * frac +
+          (1ULL << 47)) >>
+         48);
+
+    arith_uint256 next_target = ref_target * factor;
+
+    // factor contains 16 fractional bits.
+    shifts -= 16;
+
+    if (shifts <= 0) {
+        next_target >>= -shifts;
+    } else {
+        const arith_uint256 shifted = next_target << shifts;
+
+        // Detect discarded high bits from a 256-bit overflow.
+        if ((shifted >> shifts) != next_target) {
+            next_target = pow_limit;
+        } else {
+            next_target = shifted;
+        }
+    }
+
+    if (next_target == 0) {
+        next_target = arith_uint256{1};
+    } else if (next_target > pow_limit) {
+        next_target = pow_limit;
+    }
+
+    return next_target;
+}
+
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
 {
     assert(pindexLast != nullptr);
