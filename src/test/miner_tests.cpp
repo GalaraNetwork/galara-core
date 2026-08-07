@@ -924,6 +924,24 @@ BOOST_FIXTURE_TEST_CASE(galara_block1_premine, GalaraMainnetMiningSetup)
     const CBlock& good_block = block_template->block;
     BOOST_REQUIRE(!good_block.vtx.empty());
 
+    // The mining interface must expose Galara's treasury output separately
+    // from the miner's spendable reward so external mining software can
+    // preserve it in the final coinbase transaction.
+    const node::CoinbaseTx& coinbase_template = block_template->m_coinbase_tx;
+    BOOST_CHECK_EQUAL(
+        coinbase_template.block_reward_remaining,
+        GetBlockSubsidy(1, consensus));
+
+    const auto required_treasury_count = std::count_if(
+        coinbase_template.required_outputs.begin(),
+        coinbase_template.required_outputs.end(),
+        [&](const CTxOut& output) {
+            return output.nValue == GetPremineAmount(1, consensus) &&
+                   output.scriptPubKey == params.PremineScriptPubKey();
+        });
+
+    BOOST_CHECK_EQUAL(required_treasury_count, 1);
+
     const CTransaction& coinbase = *good_block.vtx[0];
 
     // Miner receives the normal block subsidy. No transactions are present,

@@ -697,6 +697,14 @@ static RPCHelpMan getblocktemplate()
                 {RPCResult::Type::NUM, "height", "The height of the next block"},
                 {RPCResult::Type::STR_HEX, "signet_challenge", /*optional=*/true, "Only on signet"},
                 {RPCResult::Type::STR_HEX, "default_witness_commitment", /*optional=*/true, "a valid witness commitment for the unmodified block template"},
+                {RPCResult::Type::ARR, "galara_required_coinbase_outputs", /*optional=*/true, "mandatory Galara coinbase outputs",
+                {
+                    {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::NUM, "value", "required output value in satoshis"},
+                        {RPCResult::Type::STR_HEX, "scriptPubKey", "required output scriptPubKey"},
+                    }},
+                }},
             }},
         },
         RPCExamples{
@@ -855,6 +863,18 @@ static RPCHelpMan getblocktemplate()
         throw JSONRPCError(RPC_INVALID_PARAMETER, "getblocktemplate must be called with the segwit rule set (call with {\"rules\": [\"segwit\"]})");
     }
 
+    const int next_height = CHECK_NONFATAL(miner.getTip()).value().height + 1;
+    const CAmount premine_amount = GetPremineAmount(next_height, consensusParams);
+
+    // Galara block 1 requires mining software to understand and preserve
+    // the mandatory treasury coinbase output.
+    if (premine_amount > 0 && !setClientRules.contains("galara-premine")) {
+        throw JSONRPCError(
+            RPC_INVALID_PARAMETER,
+            "Galara block 1 requires the galara-premine rule "
+            "(call with {\"rules\": [\"segwit\", \"galara-premine\"]})");
+    }
+
     // Update block
     static CBlockIndex* pindexPrev;
     static int64_t time_start;
@@ -949,6 +969,7 @@ static RPCHelpMan getblocktemplate()
     UniValue aRules(UniValue::VARR);
     aRules.push_back("csv");
     if (!fPreSegWit) aRules.push_back("!segwit");
+    if (premine_amount > 0) aRules.push_back("!galara-premine");
     if (consensusParams.signet_blocks) {
         // indicate to miner that they must understand signet rules
         // when attempting to mine with this template
@@ -991,7 +1012,7 @@ static RPCHelpMan getblocktemplate()
     result.pushKV("previousblockhash", block.hashPrevBlock.GetHex());
     result.pushKV("transactions", std::move(transactions));
     result.pushKV("coinbaseaux", std::move(aux));
-    result.pushKV("coinbasevalue", block.vtx[0]->vout[0].nValue);
+    result.pushKV("coinbasevalue", block.vtx[0]->GetValueOut());
     result.pushKV("longpollid", tip.GetHex() + ToString(nTransactionsUpdatedLast));
     result.pushKV("target", hashTarget.GetHex());
     result.pushKV("mintime", GetMinimumTime(pindexPrev, consensusParams.DifficultyAdjustmentInterval()));
@@ -1018,9 +1039,24 @@ static RPCHelpMan getblocktemplate()
         result.pushKV("signet_challenge", HexStr(consensusParams.signet_challenge));
     }
 
-    if (auto coinbase{block_template->getCoinbaseTx()}; coinbase.required_outputs.size() > 0) {
-        CHECK_NONFATAL(coinbase.required_outputs.size() == 1); // Only one output is currently expected
-        result.pushKV("default_witness_commitment", HexStr(coinbase.required_outputs[0].scriptPubKey));
+    if (premine_amount > 0) {
+        UniValue required_outputs(UniValue::VARR);
+        UniValue treasury_output(UniValue::VOBJ);
+        treasury_output.pushKV("value", premine_amount);
+        treasury_output.pushKV(
+            "scriptPubKey",
+            HexStr(chainman.GetParams().PremineScriptPubKey()));
+        required_outputs.push_back(std::move(treasury_output));
+        result.pushKV(
+            "galara_required_coinbase_outputs",
+            std::move(required_outputs));
+    }
+
+    if (const int witness_index = GetWitnessCommitmentIndex(block);
+        witness_index != NO_WITNESS_COMMITMENT) {
+        result.pushKV(
+            "default_witness_commitment",
+            HexStr(block.vtx[0]->vout[witness_index].scriptPubKey));
     }
 
     return result;

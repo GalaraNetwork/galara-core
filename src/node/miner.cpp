@@ -184,9 +184,11 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock()
     const CAmount premine_amount{
         GetPremineAmount(nHeight, chainparams.GetConsensus())};
     if (premine_amount > 0) {
-        coinbaseTx.vout.emplace_back(
+        const CTxOut premine_output{
             premine_amount,
-            chainparams.PremineScriptPubKey());
+            chainparams.PremineScriptPubKey()};
+        coinbaseTx.vout.push_back(premine_output);
+        coinbase_tx.required_outputs.push_back(premine_output);
     }
 
     // Start the coinbase scriptSig with the block height as required by BIP34.
