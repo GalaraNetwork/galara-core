@@ -97,6 +97,12 @@ public:
         consensus.nInitialPowBits = 0x1b014f8a; // ~50,000 difficulty
         consensus.nPremineHeight = 1;
         consensus.nPremineAmount = 700800 * COIN;
+
+        // Galara Network Treasury: 2-of-3 native SegWit multisig.
+        const auto premine_script = ParseHex(
+            "00200f7f09c48be501a04d15a6553e7dfb4f9dec46972da5a1ea01e0fa41b7732c25");
+        m_premine_script_pub_key =
+            CScript(premine_script.begin(), premine_script.end());
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.enforce_BIP94 = false;
         consensus.fPowNoRetargeting = false;

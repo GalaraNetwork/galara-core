@@ -92,6 +92,7 @@ public:
     std::vector<int> GetAvailableSnapshotHeights() const;
 
     const CBlock& GenesisBlock() const { return genesis; }
+    const CScript& PremineScriptPubKey() const { return m_premine_script_pub_key; }
     /** Default value for -checkmempool and -checkblockindex argument */
     bool DefaultConsistencyChecks() const { return fDefaultConsistencyChecks; }
     /** If this chain is exclusively used for testing */
@@ -174,6 +175,7 @@ protected:
     std::string bech32_hrp;
     ChainType m_chain_type;
     CBlock genesis;
+    CScript m_premine_script_pub_key;
     std::vector<uint8_t> vFixedSeeds;
     bool fDefaultConsistencyChecks;
     bool m_is_mockable_chain;

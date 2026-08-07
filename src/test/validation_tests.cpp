@@ -11,6 +11,7 @@
 #include <signet.h>
 #include <uint256.h>
 #include <util/chaintype.h>
+#include <util/strencodings.h>
 #include <validation.h>
 
 #include <string>
@@ -63,6 +64,11 @@ BOOST_AUTO_TEST_CASE(block_subsidy_test)
     BOOST_CHECK_EQUAL(GetPremineAmount(0, consensus), 0);
     BOOST_CHECK_EQUAL(GetPremineAmount(1, consensus), 700800 * COIN);
     BOOST_CHECK_EQUAL(GetPremineAmount(2, consensus), 0);
+
+    // The block-1 premine must use Galara's permanent 2-of-3 treasury script.
+    BOOST_CHECK_EQUAL(
+        HexStr(chainParams->PremineScriptPubKey()),
+        "00200f7f09c48be501a04d15a6553e7dfb4f9dec46972da5a1ea01e0fa41b7732c25");
 
     TestBlockSubsidyHalvings(consensus); // Galara mainnet
     TestBlockSubsidyHalvings(150); // As in regtest
