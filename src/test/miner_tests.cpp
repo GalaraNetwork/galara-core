@@ -78,6 +78,14 @@ struct MinerTestingSetup : public TestingSetup {
         return interfaces::MakeMining(m_node, /*wait_loaded=*/false);
     }
 };
+
+struct GalaraMainnetMiningSetup : public TestingSetup {
+    GalaraMainnetMiningSetup()
+        : TestingSetup{ChainType::MAIN}
+    {
+    }
+};
+
 } // namespace miner_tests
 
 BOOST_FIXTURE_TEST_SUITE(miner_tests, MinerTestingSetup)
@@ -890,6 +898,153 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
     SetMockTime(0);
 
     TestPrioritisedMining(scriptPubKey, txFirst);
+}
+
+BOOST_FIXTURE_TEST_CASE(galara_block1_premine, GalaraMainnetMiningSetup)
+{
+    const auto& params = m_node.chainman->GetParams();
+    const auto& consensus = params.GetConsensus();
+
+    BOOST_REQUIRE_EQUAL(m_node.chainman->ActiveChain().Height(), 0);
+    BOOST_REQUIRE_EQUAL(consensus.nPremineHeight, 1);
+
+    BlockAssembler::Options options;
+    options.coinbase_output_script = CScript() << OP_TRUE;
+    options.include_dummy_extranonce = true;
+
+    auto block_template =
+        BlockAssembler{
+            m_node.chainman->ActiveChainstate(),
+            m_node.mempool.get(),
+            options}
+            .CreateNewBlock();
+
+    BOOST_REQUIRE(block_template);
+
+    const CBlock& good_block = block_template->block;
+    BOOST_REQUIRE(!good_block.vtx.empty());
+
+    const CTransaction& coinbase = *good_block.vtx[0];
+
+    // Miner receives the normal block subsidy. No transactions are present,
+    // so this template contains no transaction fees.
+    BOOST_REQUIRE_GE(coinbase.vout.size(), 2U);
+    BOOST_CHECK_EQUAL(
+        coinbase.vout[0].nValue,
+        GetBlockSubsidy(1, consensus));
+
+    // Exactly one output must pay the configured 700,800 GLRA premine to
+    // Galara's permanent 2-of-3 treasury.
+    const auto treasury_count = std::count_if(
+        coinbase.vout.begin(),
+        coinbase.vout.end(),
+        [&](const CTxOut& output) {
+            return output.nValue == GetPremineAmount(1, consensus) &&
+                   output.scriptPubKey == params.PremineScriptPubKey();
+        });
+
+    BOOST_CHECK_EQUAL(treasury_count, 1);
+    BOOST_CHECK_EQUAL(GetPremineAmount(1, consensus), 700800 * COIN);
+
+    // Missing treasury output must fail.
+    {
+        CBlock block{good_block};
+        CMutableTransaction cb{*block.vtx[0]};
+
+        const auto it = std::find_if(
+            cb.vout.begin(),
+            cb.vout.end(),
+            [&](const CTxOut& output) {
+                return output.nValue == GetPremineAmount(1, consensus) &&
+                       output.scriptPubKey == params.PremineScriptPubKey();
+            });
+
+        BOOST_REQUIRE(it != cb.vout.end());
+        cb.vout.erase(it);
+        block.vtx[0] = MakeTransactionRef(std::move(cb));
+
+        const BlockValidationState state = TestBlockValidity(
+            m_node.chainman->ActiveChainstate(),
+            block,
+            /*check_pow=*/false,
+            /*check_merkle_root=*/false);
+        BOOST_CHECK(!state.IsValid());
+    }
+
+    // Redirected treasury output must fail.
+    {
+        CBlock block{good_block};
+        CMutableTransaction cb{*block.vtx[0]};
+
+        auto it = std::find_if(
+            cb.vout.begin(),
+            cb.vout.end(),
+            [&](const CTxOut& output) {
+                return output.nValue == GetPremineAmount(1, consensus) &&
+                       output.scriptPubKey == params.PremineScriptPubKey();
+            });
+
+        BOOST_REQUIRE(it != cb.vout.end());
+        it->scriptPubKey = CScript() << OP_TRUE;
+        block.vtx[0] = MakeTransactionRef(std::move(cb));
+
+        const BlockValidationState state = TestBlockValidity(
+            m_node.chainman->ActiveChainstate(),
+            block,
+            /*check_pow=*/false,
+            /*check_merkle_root=*/false);
+        BOOST_CHECK(!state.IsValid());
+    }
+
+    // Wrong treasury amount must fail.
+    {
+        CBlock block{good_block};
+        CMutableTransaction cb{*block.vtx[0]};
+
+        auto it = std::find_if(
+            cb.vout.begin(),
+            cb.vout.end(),
+            [&](const CTxOut& output) {
+                return output.nValue == GetPremineAmount(1, consensus) &&
+                       output.scriptPubKey == params.PremineScriptPubKey();
+            });
+
+        BOOST_REQUIRE(it != cb.vout.end());
+        it->nValue -= 1;
+        block.vtx[0] = MakeTransactionRef(std::move(cb));
+
+        const BlockValidationState state = TestBlockValidity(
+            m_node.chainman->ActiveChainstate(),
+            block,
+            /*check_pow=*/false,
+            /*check_merkle_root=*/false);
+        BOOST_CHECK(!state.IsValid());
+    }
+
+    // Duplicating the full premine output must fail.
+    {
+        CBlock block{good_block};
+        CMutableTransaction cb{*block.vtx[0]};
+
+        const auto it = std::find_if(
+            cb.vout.begin(),
+            cb.vout.end(),
+            [&](const CTxOut& output) {
+                return output.nValue == GetPremineAmount(1, consensus) &&
+                       output.scriptPubKey == params.PremineScriptPubKey();
+            });
+
+        BOOST_REQUIRE(it != cb.vout.end());
+        cb.vout.push_back(*it);
+        block.vtx[0] = MakeTransactionRef(std::move(cb));
+
+        const BlockValidationState state = TestBlockValidity(
+            m_node.chainman->ActiveChainstate(),
+            block,
+            /*check_pow=*/false,
+            /*check_merkle_root=*/false);
+        BOOST_CHECK(!state.IsValid());
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

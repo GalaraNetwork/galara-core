@@ -171,13 +171,23 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock()
     coinbaseTx.vin[0].nSequence = CTxIn::MAX_SEQUENCE_NONFINAL; // Make sure timelock is enforced.
     coinbase_tx.sequence = coinbaseTx.vin[0].nSequence;
 
-    // Add an output that spends the full coinbase reward.
+    // Add the miner output for the normal block subsidy plus fees.
     coinbaseTx.vout.resize(1);
     coinbaseTx.vout[0].scriptPubKey = m_options.coinbase_output_script;
-    // Block subsidy + fees
-    const CAmount block_reward{nFees + GetBlockSubsidy(nHeight, chainparams.GetConsensus())};
+    const CAmount block_reward{
+        nFees + GetBlockSubsidy(nHeight, chainparams.GetConsensus())};
     coinbaseTx.vout[0].nValue = block_reward;
     coinbase_tx.block_reward_remaining = block_reward;
+
+    // Galara mainnet creates its one-time premine as a separate block-1
+    // coinbase output to the permanent Galara Network Treasury.
+    const CAmount premine_amount{
+        GetPremineAmount(nHeight, chainparams.GetConsensus())};
+    if (premine_amount > 0) {
+        coinbaseTx.vout.emplace_back(
+            premine_amount,
+            chainparams.PremineScriptPubKey());
+    }
 
     // Start the coinbase scriptSig with the block height as required by BIP34.
     // Mining clients are expected to append extra data to this prefix, so

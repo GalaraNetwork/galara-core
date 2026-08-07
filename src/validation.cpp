@@ -2620,7 +2620,35 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
              Ticks<SecondsDouble>(m_chainman.time_connect),
              Ticks<MillisecondsDouble>(m_chainman.time_connect) / m_chainman.num_blocks_total);
 
-    CAmount blockReward = nFees + GetBlockSubsidy(pindex->nHeight, params.GetConsensus());
+    const CAmount premine_amount{
+        GetPremineAmount(pindex->nHeight, params.GetConsensus())};
+
+    // Galara's one-time premine is valid only when the coinbase contains
+    // exactly one output paying the configured amount to the permanent
+    // Galara Network Treasury script.
+    if (premine_amount > 0 && state.IsValid()) {
+        const auto& premine_script{params.PremineScriptPubKey()};
+        const auto matching_outputs = std::count_if(
+            block.vtx[0]->vout.begin(),
+            block.vtx[0]->vout.end(),
+            [&](const CTxOut& output) {
+                return output.nValue == premine_amount &&
+                       output.scriptPubKey == premine_script;
+            });
+
+        if (matching_outputs != 1) {
+            state.Invalid(
+                BlockValidationResult::BLOCK_CONSENSUS,
+                "bad-cb-premine",
+                "missing, duplicated, or incorrect Galara treasury premine output");
+        }
+    }
+
+    const CAmount blockReward =
+        nFees +
+        GetBlockSubsidy(pindex->nHeight, params.GetConsensus()) +
+        premine_amount;
+
     if (block.vtx[0]->GetValueOut() > blockReward && state.IsValid()) {
         state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-amount",
                       strprintf("coinbase pays too much (actual=%d vs limit=%d)", block.vtx[0]->GetValueOut(), blockReward));
