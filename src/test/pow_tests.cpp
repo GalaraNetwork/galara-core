@@ -20,6 +20,9 @@ BOOST_FIXTURE_TEST_SUITE(pow_tests, BasicTestingSetup)
 BOOST_AUTO_TEST_CASE(get_next_work)
 {
     const auto chainParams = CreateChainParams(*m_node.args, ChainType::MAIN);
+    auto legacy_consensus = chainParams->GetConsensus();
+    legacy_consensus.nASERTHalfLife = 0;
+    legacy_consensus.nASERTActivationHeight = 0;
     int64_t nLastRetargetTime = 1261130161; // Block #30240
     CBlockIndex pindexLast;
     pindexLast.nHeight = 32255;
@@ -31,29 +34,35 @@ BOOST_AUTO_TEST_CASE(get_next_work)
     // reimplementing the same code that is written in pow.cpp. Rather than
     // copy that code, we just hardcode the expected result.
     unsigned int expected_nbits = 0x1d00ffffU;
-    BOOST_CHECK_EQUAL(CalculateNextWorkRequired(&pindexLast, nLastRetargetTime, chainParams->GetConsensus()), expected_nbits);
-    BOOST_CHECK(PermittedDifficultyTransition(chainParams->GetConsensus(), pindexLast.nHeight+1, pindexLast.nBits, expected_nbits));
+    BOOST_CHECK_EQUAL(CalculateNextWorkRequired(&pindexLast, nLastRetargetTime, legacy_consensus), expected_nbits);
+    BOOST_CHECK(PermittedDifficultyTransition(legacy_consensus, pindexLast.nHeight+1, pindexLast.nBits, expected_nbits));
 }
 
 /* Test the constraint on the upper bound for next work */
 BOOST_AUTO_TEST_CASE(get_next_work_pow_limit)
 {
     const auto chainParams = CreateChainParams(*m_node.args, ChainType::MAIN);
+    auto legacy_consensus = chainParams->GetConsensus();
+    legacy_consensus.nASERTHalfLife = 0;
+    legacy_consensus.nASERTActivationHeight = 0;
     int64_t nLastRetargetTime = 1231006505; // Block #0
     CBlockIndex pindexLast;
     pindexLast.nHeight = 2015;
     pindexLast.nTime = 1233061996;  // Block #2015
     pindexLast.nBits = 0x1d00ffff;
     unsigned int expected_nbits = 0x1d00ffffU;
-    BOOST_CHECK_EQUAL(CalculateNextWorkRequired(&pindexLast, nLastRetargetTime, chainParams->GetConsensus()), expected_nbits);
-    BOOST_CHECK(PermittedDifficultyTransition(chainParams->GetConsensus(), pindexLast.nHeight+1, pindexLast.nBits, expected_nbits));
+    BOOST_CHECK_EQUAL(CalculateNextWorkRequired(&pindexLast, nLastRetargetTime, legacy_consensus), expected_nbits);
+    BOOST_CHECK(PermittedDifficultyTransition(legacy_consensus, pindexLast.nHeight+1, pindexLast.nBits, expected_nbits));
 }
 
 /* Test the constraint on the lower bound for actual time taken */
 BOOST_AUTO_TEST_CASE(get_next_work_lower_limit_actual)
 {
     const auto chainParams = CreateChainParams(*m_node.args, ChainType::MAIN);
-    const auto& consensus = chainParams->GetConsensus();
+    auto legacy_consensus = chainParams->GetConsensus();
+    legacy_consensus.nASERTHalfLife = 0;
+    legacy_consensus.nASERTActivationHeight = 0;
+    const auto& consensus = legacy_consensus;
 
     CBlockIndex pindexLast;
     pindexLast.nHeight = 68543;
@@ -91,17 +100,20 @@ BOOST_AUTO_TEST_CASE(get_next_work_lower_limit_actual)
 BOOST_AUTO_TEST_CASE(get_next_work_upper_limit_actual)
 {
     const auto chainParams = CreateChainParams(*m_node.args, ChainType::MAIN);
+    auto legacy_consensus = chainParams->GetConsensus();
+    legacy_consensus.nASERTHalfLife = 0;
+    legacy_consensus.nASERTActivationHeight = 0;
     int64_t nLastRetargetTime = 1263163443; // NOTE: Not an actual block time
     CBlockIndex pindexLast;
     pindexLast.nHeight = 46367;
     pindexLast.nTime = 1269211443;  // Block #46367
     pindexLast.nBits = 0x1c387f6f;
     unsigned int expected_nbits = 0x1d00e1fdU;
-    BOOST_CHECK_EQUAL(CalculateNextWorkRequired(&pindexLast, nLastRetargetTime, chainParams->GetConsensus()), expected_nbits);
-    BOOST_CHECK(PermittedDifficultyTransition(chainParams->GetConsensus(), pindexLast.nHeight+1, pindexLast.nBits, expected_nbits));
+    BOOST_CHECK_EQUAL(CalculateNextWorkRequired(&pindexLast, nLastRetargetTime, legacy_consensus), expected_nbits);
+    BOOST_CHECK(PermittedDifficultyTransition(legacy_consensus, pindexLast.nHeight+1, pindexLast.nBits, expected_nbits));
     // Test that increasing nbits further would not be a PermittedDifficultyTransition.
     unsigned int invalid_nbits = expected_nbits+1;
-    BOOST_CHECK(!PermittedDifficultyTransition(chainParams->GetConsensus(), pindexLast.nHeight+1, pindexLast.nBits, invalid_nbits));
+    BOOST_CHECK(!PermittedDifficultyTransition(legacy_consensus, pindexLast.nHeight+1, pindexLast.nBits, invalid_nbits));
 }
 
 BOOST_AUTO_TEST_CASE(CheckProofOfWork_test_negative_target)
@@ -264,6 +276,131 @@ BOOST_AUTO_TEST_CASE(galara_asert_calculation)
         pow_limit,
         consensus.nASERTHalfLife);
     BOOST_CHECK(target == pow_limit);
+}
+
+BOOST_AUTO_TEST_CASE(galara_asert_reference_vectors)
+{
+    // Known-answer vectors adapted directly from Bitcoin ABC's
+    // CalculateASERT reference tests. These use the reference
+    // algorithm's original 600-second spacing so that the expected
+    // results can be compared exactly.
+    const arith_uint256 pow_limit = UintToArith256(uint256{
+        "00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"});
+    const int64_t spacing = 600;
+    const int64_t half_life = 2 * 24 * 60 * 60;
+    const int64_t parent_time_diff = 600;
+
+    struct Vector {
+        arith_uint256 ref_target;
+        int64_t time_diff;
+        int64_t height_diff;
+        arith_uint256 expected_target;
+        uint32_t expected_bits;
+    };
+
+    const arith_uint256 single_300_target = UintToArith256(uint256{
+        "00000000ffb1ffffffffffffffffffffffffffffffffffffffffffffffffffff"});
+
+    const Vector vectors[] = {
+        {
+            pow_limit,
+            parent_time_diff,
+            2 * 144,
+            pow_limit >> 1,
+            0x1c7fffff,
+        },
+        {
+            pow_limit,
+            parent_time_diff,
+            4 * 144,
+            pow_limit >> 2,
+            0x1c3fffff,
+        },
+        {
+            pow_limit,
+            parent_time_diff,
+            2 * (256 - 33) * 144,
+            arith_uint256{1},
+            0x01010000,
+        },
+        {
+            pow_limit,
+            parent_time_diff + 300,
+            1,
+            single_300_target,
+            0x1d00ffb1,
+        },
+    };
+
+    for (const auto& vector : vectors) {
+        const arith_uint256 target = CalculateASERT(
+            vector.ref_target,
+            spacing,
+            vector.time_diff,
+            vector.height_diff,
+            pow_limit,
+            half_life);
+
+        BOOST_CHECK(target == vector.expected_target);
+        BOOST_CHECK_EQUAL(target.GetCompact(), vector.expected_bits);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(galara_asert_activation)
+{
+    const auto chain_params = CreateChainParams(*m_node.args, ChainType::MAIN);
+    const auto& consensus = chain_params->GetConsensus();
+    const CBlock& genesis = chain_params->GenesisBlock();
+
+    BOOST_CHECK_EQUAL(consensus.nASERTActivationHeight, 2);
+    BOOST_CHECK_EQUAL(consensus.nASERTHalfLife, 172800);
+
+    CBlockIndex genesis_index{genesis};
+    genesis_index.nHeight = 0;
+
+    // Block 1 uses Galara's dedicated initial live-mining target.
+    CBlockHeader block1;
+    block1.nTime = genesis.nTime + consensus.nPowTargetSpacing;
+
+    const uint32_t block1_bits =
+        GetNextWorkRequired(&genesis_index, &block1, consensus);
+
+    BOOST_CHECK_EQUAL(block1_bits, consensus.nInitialPowBits);
+    BOOST_CHECK_EQUAL(block1_bits, 0x1b014f8aU);
+
+    // Build an ideal block 1 index and calculate block 2.
+    CBlockIndex block1_index{block1};
+    block1_index.pprev = &genesis_index;
+    block1_index.nHeight = 1;
+    block1_index.nBits = block1_bits;
+
+    CBlockHeader block2;
+    block2.nTime =
+        block1.nTime + consensus.nPowTargetSpacing;
+
+    const uint32_t block2_bits =
+        GetNextWorkRequired(&block1_index, &block2, consensus);
+
+    BOOST_CHECK_EQUAL(block2_bits, consensus.nInitialPowBits);
+
+    // ASERT permits per-block nBits changes during headers presync,
+    // provided the compact target itself is valid.
+    arith_uint256 harder_target;
+    harder_target.SetCompact(block1_bits);
+    harder_target >>= 1;
+
+    BOOST_CHECK(PermittedDifficultyTransition(
+        consensus,
+        2,
+        block1_bits,
+        harder_target.GetCompact()));
+
+    // Invalid targets remain forbidden.
+    BOOST_CHECK(!PermittedDifficultyTransition(
+        consensus,
+        2,
+        block1_bits,
+        UintToArith256(consensus.powLimit).GetCompact(true)));
 }
 
 BOOST_AUTO_TEST_CASE(ChainParams_MAIN_sanity)

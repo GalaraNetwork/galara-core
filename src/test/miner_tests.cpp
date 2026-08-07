@@ -40,6 +40,13 @@ using node::BlockAssembler;
 
 namespace miner_tests {
 struct MinerTestingSetup : public TestingSetup {
+    MinerTestingSetup()
+        : TestingSetup{
+              ChainType::REGTEST,
+              {.extra_args = {"-testactivationheight=csv@1000000"}}}
+    {
+    }
+
     void TestPackageSelection(const CScript& scriptPubKey, const std::vector<CTransactionRef>& txFirst) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
     void TestBasicMining(const CScript& scriptPubKey, const std::vector<CTransactionRef>& txFirst, int baseheight) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
     void TestPrioritisedMining(const CScript& scriptPubKey, const std::vector<CTransactionRef>& txFirst) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
@@ -226,7 +233,7 @@ void MinerTestingSetup::TestPackageSelection(const CScript& scriptPubKey, const 
     TryAddToMempool(tx_mempool, entry.Fee(feeToUse + 2).FromTx(tx));
 
     // waitNext() should return if fees for the new template are at least 1 sat up
-    block_template = block_template->waitNext({.fee_threshold = 1});
+    block_template = block_template->waitNext({.timeout = MillisecondsDouble{0}, .fee_threshold = 1});
     BOOST_REQUIRE(block_template);
     block = block_template->getBlock();
     BOOST_REQUIRE_EQUAL(block.vtx.size(), 6U);
@@ -819,7 +826,9 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
             block.nTime = Assert(m_node.chainman)->ActiveChain().Tip()->GetMedianTimePast()+1;
             txCoinbase.version = 1;
             txCoinbase.vin[0].scriptSig = CScript{} << (current_height + 1) << bi.extranonce;
-            txCoinbase.vout.resize(1); // Ignore the (optional) segwit commitment added by CreateNewBlock (as the hardcoded nonces don't account for this)
+            // Keep the SegWit commitment created by CreateNewBlock. Since
+            // this test now grinds a valid nonce dynamically, the commitment
+            // no longer needs to be removed.
             txCoinbase.vout[0].scriptPubKey = CScript();
             block.vtx[0] = MakeTransactionRef(txCoinbase);
             if (txFirst.size() == 0)
@@ -827,7 +836,17 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
             if (txFirst.size() < 4)
                 txFirst.push_back(block.vtx[0]);
             block.hashMerkleRoot = BlockMerkleRoot(block);
+
+            // BLOCKINFO contains historical Bitcoin test nonces. Use the
+            // stored nonce only as a starting point, then grind until this
+            // regtest block satisfies its actual proof-of-work target.
             block.nNonce = bi.nonce;
+            while (!CheckProofOfWork(
+                block.GetHash(),
+                block.nBits,
+                Assert(m_node.chainman)->GetParams().GetConsensus())) {
+                ++block.nNonce;
+            }
         }
         std::shared_ptr<const CBlock> shared_pblock = std::make_shared<const CBlock>(block);
         // Alternate calls between Chainman's ProcessNewBlock and submitSolution
@@ -859,7 +878,11 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
     TestBasicMining(scriptPubKey, txFirst, baseheight);
 
     m_node.chainman->ActiveChain().Tip()->nHeight--;
-    SetMockTime(0);
+
+    // Keep mock time near the synthetic regtest chain tip. Otherwise
+    // regtest's 20-minute minimum-difficulty rule makes waitNext()
+    // return a refreshed template even with an empty mempool.
+    SetMockTime(m_node.chainman->ActiveChain().Tip()->GetBlockTime());
 
     TestPackageSelection(scriptPubKey, txFirst);
 

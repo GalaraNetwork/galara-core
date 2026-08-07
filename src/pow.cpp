@@ -83,7 +83,54 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     assert(pindexLast != nullptr);
     unsigned int nProofOfWorkLimit = UintToArith256(params.powLimit).GetCompact();
 
-    // Only change once per difficulty adjustment interval
+    const int next_height = pindexLast->nHeight + 1;
+
+    // Galara mainnet uses a dedicated launch target for block 1.
+    // Genesis retains its historical PoW target, while live mining
+    // begins from nInitialPowBits before ASERT activates at block 2.
+    if (params.nInitialPowBits != 0 && next_height == 1) {
+        return params.nInitialPowBits;
+    }
+
+    if (params.nASERTHalfLife > 0 &&
+        next_height >= params.nASERTActivationHeight) {
+
+        const CBlockIndex* anchor = pindexLast->GetAncestor(
+            params.nASERTActivationHeight - 1);
+        assert(anchor != nullptr);
+
+        arith_uint256 anchor_target;
+        bool negative{false};
+        bool overflow{false};
+        anchor_target.SetCompact(anchor->nBits, &negative, &overflow);
+
+        assert(!negative);
+        assert(!overflow);
+        assert(anchor_target > 0);
+        assert(anchor_target <= UintToArith256(params.powLimit));
+
+        const int64_t height_diff =
+            pindexLast->nHeight - anchor->nHeight;
+
+    // ASERT measures time from the parent of the anchor block.
+    // When the anchor is genesis, use the genesis timestamp itself,
+    // matching the canonical ASERT genesis special case.
+    const int64_t time_diff =
+        pindexLast->GetBlockTime() -
+        (anchor->pprev
+            ? anchor->pprev->GetBlockTime()
+            : anchor->GetBlockTime());
+
+        return CalculateASERT(
+            anchor_target,
+            params.nPowTargetSpacing,
+            time_diff,
+            height_diff,
+            UintToArith256(params.powLimit),
+            params.nASERTHalfLife).GetCompact();
+    }
+
+    // Legacy periodic difficulty adjustment.
     if ((pindexLast->nHeight+1) % params.DifficultyAdjustmentInterval() != 0)
     {
         if (params.fPowAllowMinDifficultyBlocks)
@@ -156,6 +203,11 @@ unsigned int CalculateNextWorkRequired(const CBlockIndex* pindexLast, int64_t nF
 bool PermittedDifficultyTransition(const Consensus::Params& params, int64_t height, uint32_t old_nbits, uint32_t new_nbits)
 {
     if (params.fPowAllowMinDifficultyBlocks) return true;
+
+    if (params.nASERTHalfLife > 0 &&
+        height >= params.nASERTActivationHeight) {
+        return DeriveTarget(new_nbits, params.powLimit).has_value();
+    }
 
     if (height % params.DifficultyAdjustmentInterval() == 0) {
         int64_t smallest_timespan = params.nPowTargetTimespan/4;

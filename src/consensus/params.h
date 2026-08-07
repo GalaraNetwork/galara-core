@@ -120,6 +120,8 @@ struct Params {
     int64_t nPowTargetSpacing;
     int64_t nPowTargetTimespan;
     int64_t nASERTHalfLife{0};
+    int nASERTActivationHeight{0};
+    uint32_t nInitialPowBits{0};
     std::chrono::seconds PowTargetSpacing() const
     {
         return std::chrono::seconds{nPowTargetSpacing};
