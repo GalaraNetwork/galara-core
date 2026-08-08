@@ -370,9 +370,20 @@ class StratumHandler(socketserver.StreamRequestHandler):
             "little",
         )
 
-        share_target = compact_to_target(
-            "1d00ffff"
+        test_easy_shares = (
+            os.environ.get(
+                "GALARA_STRATUM_TEST_EASY_SHARES",
+                "0",
+            )
+            == "1"
         )
+
+        if test_easy_shares:
+            share_target = (1 << 256) - 1
+        else:
+            share_target = compact_to_target(
+                "1d00ffff"
+            )
 
         network_target = compact_to_target(
             job["nbits"]
@@ -393,7 +404,7 @@ class StratumHandler(socketserver.StreamRequestHandler):
             print("version_bits:", version_bits)
 
         print("candidate hash:", hash_display)
-        print("meets difficulty-1 share:", meets_share)
+        print("meets configured share target:", meets_share)
         print("meets Galara network target:", meets_network)
 
         if meets_network:
