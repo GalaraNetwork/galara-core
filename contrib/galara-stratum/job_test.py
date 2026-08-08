@@ -17,7 +17,9 @@ EXTRANONCE2_SIZE = 4
 # Temporary test payout script only.
 # OP_TRUE is useful for construction testing, but MUST NOT be used for
 # Galara's real launch miner payout.
-MINER_SCRIPT = bytes.fromhex("51")
+MINER_SCRIPT = bytes.fromhex(
+    "00146de876d7867d34cab179a077342b0aa5310a384b"
+)
 
 
 def rpc_call(method, params=None):

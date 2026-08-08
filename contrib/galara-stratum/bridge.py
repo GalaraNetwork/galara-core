@@ -16,7 +16,7 @@ RPC_COOKIE = os.path.expanduser(
     "~/.galara-launch-test/.cookie"
 )
 
-STRATUM_HOST = "127.0.0.1"
+STRATUM_HOST = "0.0.0.0"
 STRATUM_PORT = 3333
 
 
@@ -69,7 +69,9 @@ def get_galara_template():
 
 
 EXTRANONCE2_SIZE = 4
-MINER_SCRIPT = bytes.fromhex("51")
+MINER_SCRIPT = bytes.fromhex(
+    "00146de876d7867d34cab179a077342b0aa5310a384b"
+)
 
 
 def varint(value):
