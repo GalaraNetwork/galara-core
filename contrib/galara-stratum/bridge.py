@@ -120,18 +120,19 @@ def build_coinbase_parts(template):
 
     height = template["height"]
 
-    if height < 0x80:
-        height_number = bytes([height])
+    if height == 0:
+        height_script = b"\x00"
+    elif 1 <= height <= 16:
+        height_script = bytes([0x50 + height])
     else:
         raise RuntimeError(
-            "Temporary Stratum bridge only supports small heights"
+            "Temporary Stratum bridge only supports heights 0-16"
         )
 
     script_prefix = (
-        push_data(height_number)
+        height_script
         + b"/Galara/"
     )
-
     # extranonce1 + extranonce2 are inserted between these pieces.
     script_suffix = b""
 
@@ -219,6 +220,71 @@ JOBS = {}
 EXTRANONCE1 = bytes.fromhex("00000001")
 VERSION_MASK = 0x1FFFE000
 
+
+def build_block_candidate(
+    job,
+    template,
+    extranonce2,
+    ntime,
+    nonce,
+    version_bits=None,
+):
+    coinbase = bytes.fromhex(
+        job["coinbase1"]
+        + EXTRANONCE1.hex()
+        + extranonce2
+        + job["coinbase2"]
+    )
+
+    merkle_root = sha256d(coinbase)
+
+    if job["merkle_branch"]:
+        raise RuntimeError(
+            "Merkle branches are not implemented yet"
+        )
+
+    stratum_prevhash = bytes.fromhex(
+        job["prevhash"]
+    )
+
+    display_prevhash = b"".join(
+        stratum_prevhash[i:i+4]
+        for i in range(28, -1, -4)
+    )
+
+    header_prevhash = display_prevhash[::-1]
+
+    job_version = int(job["version"], 16)
+
+    if version_bits is not None:
+        submitted_bits = int(version_bits, 16)
+
+        header_version = (
+            (job_version & ~VERSION_MASK)
+            | (submitted_bits & VERSION_MASK)
+        )
+    else:
+        header_version = job_version
+
+    header = (
+        struct.pack("<I", header_version)
+        + header_prevhash
+        + merkle_root
+        + struct.pack("<I", int(ntime, 16))
+        + bytes.fromhex(job["nbits"])[::-1]
+        + struct.pack("<I", int(nonce, 16))
+    )
+
+    block = (
+        header
+        + varint(1 + len(template["transactions"]))
+        + coinbase
+    )
+
+    for tx in template["transactions"]:
+        block += bytes.fromhex(tx["data"])
+
+    return block
 
 class StratumHandler(socketserver.StreamRequestHandler):
     def send_response(self, request_id, result, error=None):
