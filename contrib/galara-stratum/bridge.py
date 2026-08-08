@@ -1,0 +1,585 @@
+#!/usr/bin/env python3
+
+import hashlib
+import struct
+import threading
+import time
+import base64
+import json
+import os
+import socketserver
+import urllib.request
+
+
+RPC_URL = "http://127.0.0.1:29492/"
+RPC_COOKIE = os.path.expanduser(
+    "~/.galara-launch-test/.cookie"
+)
+
+STRATUM_HOST = "127.0.0.1"
+STRATUM_PORT = 3333
+
+
+def read_rpc_cookie():
+    with open(RPC_COOKIE, "r", encoding="utf-8") as cookie_file:
+        return cookie_file.read().strip()
+
+
+def rpc_call(method, params=None):
+    if params is None:
+        params = []
+
+    payload = json.dumps({
+        "jsonrpc": "2.0",
+        "id": "galara-stratum",
+        "method": method,
+        "params": params,
+    }).encode()
+
+    auth = base64.b64encode(
+        read_rpc_cookie().encode()
+    ).decode()
+
+    request = urllib.request.Request(
+        RPC_URL,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Basic {auth}",
+        },
+    )
+
+    with urllib.request.urlopen(request, timeout=10) as response:
+        result = json.loads(response.read().decode())
+
+    if result.get("error"):
+        raise RuntimeError(result["error"])
+
+    return result["result"]
+def get_galara_template():
+    return rpc_call(
+        "getblocktemplate",
+        [{
+            "rules": [
+                "segwit",
+                "galara-premine",
+            ]
+        }]
+    )
+
+
+EXTRANONCE2_SIZE = 4
+MINER_SCRIPT = bytes.fromhex("51")
+
+
+def varint(value):
+    if value < 0xfd:
+        return bytes([value])
+    if value <= 0xffff:
+        return b"\xfd" + struct.pack("<H", value)
+    if value <= 0xffffffff:
+        return b"\xfe" + struct.pack("<I", value)
+    return b"\xff" + struct.pack("<Q", value)
+
+
+def push_data(data):
+    if len(data) < 0x4c:
+        return bytes([len(data)]) + data
+    raise ValueError("push_data only supports short values")
+
+
+def serialize_output(value, script):
+    return (
+        struct.pack("<Q", value)
+        + varint(len(script))
+        + script
+    )
+
+
+def build_coinbase_parts(template):
+    required = template.get(
+        "galara_required_coinbase_outputs",
+        []
+    )
+
+    if template["height"] == 1 and len(required) != 1:
+        raise RuntimeError(
+            "Galara block 1 requires exactly one treasury output"
+        )
+
+    premine_value = 0
+    premine_script = b""
+
+    if required:
+        premine_value = required[0]["value"]
+        premine_script = bytes.fromhex(
+            required[0]["scriptPubKey"]
+        )
+
+    miner_value = template["coinbasevalue"] - premine_value
+
+    height = template["height"]
+
+    if height < 0x80:
+        height_number = bytes([height])
+    else:
+        raise RuntimeError(
+            "Temporary Stratum bridge only supports small heights"
+        )
+
+    script_prefix = (
+        push_data(height_number)
+        + b"/Galara/"
+    )
+
+    # extranonce1 + extranonce2 are inserted between these pieces.
+    script_suffix = b""
+
+    script_length = (
+        len(script_prefix)
+        + 4
+        + EXTRANONCE2_SIZE
+        + len(script_suffix)
+    )
+
+    coinbase1 = (
+        struct.pack("<I", 2)
+        + b"\x01"
+        + bytes(32)
+        + struct.pack("<I", 0xffffffff)
+        + varint(script_length)
+        + script_prefix
+    )
+
+    outputs = serialize_output(
+        miner_value,
+        MINER_SCRIPT,
+    )
+
+    if required:
+        outputs += serialize_output(
+            premine_value,
+            premine_script,
+        )
+
+    output_count = 1 + len(required)
+
+    coinbase2 = (
+        script_suffix
+        + struct.pack("<I", 0xffffffff)
+        + varint(output_count)
+        + outputs
+        + struct.pack("<I", 0)
+    )
+
+    return coinbase1.hex(), coinbase2.hex()
+
+
+def build_job(template):
+    coinbase1, coinbase2 = build_coinbase_parts(template)
+
+    raw_prevhash = bytes.fromhex(
+        template["previousblockhash"]
+    )
+
+    stratum_prevhash = b"".join(
+        raw_prevhash[i:i+4]
+        for i in range(28, -1, -4)
+    ).hex()
+
+    return {
+        "job_id": f"galara-{template['height']}-{template['curtime']}",
+        "prevhash": stratum_prevhash,
+        "coinbase1": coinbase1,
+        "coinbase2": coinbase2,
+        "merkle_branch": [],
+        "version": f"{template['version']:08x}",
+        "nbits": template["bits"],
+        "ntime": f"{template['curtime']:08x}",
+        "clean_jobs": True,
+    }
+
+def sha256d(data):
+    return hashlib.sha256(
+        hashlib.sha256(data).digest()
+    ).digest()
+
+
+def compact_to_target(bits_hex):
+    bits = int(bits_hex, 16)
+    exponent = bits >> 24
+    mantissa = bits & 0x007fffff
+
+    if exponent <= 3:
+        return mantissa >> (8 * (3 - exponent))
+
+    return mantissa << (8 * (exponent - 3))
+
+JOBS = {}
+EXTRANONCE1 = bytes.fromhex("00000001")
+VERSION_MASK = 0x1FFFE000
+
+
+class StratumHandler(socketserver.StreamRequestHandler):
+    def send_response(self, request_id, result, error=None):
+        response = {
+            "id": request_id,
+            "result": result,
+            "error": error,
+        }
+
+        self.wfile.write(
+            (json.dumps(response) + "\n").encode()
+        )
+        self.wfile.flush()
+
+    def send_notification(self, method, params):
+        message = {
+            "id": None,
+            "method": method,
+            "params": params,
+        }
+
+        self.wfile.write(
+            (json.dumps(message) + "\n").encode()
+        )
+        self.wfile.flush()
+
+    def verify_submit(self, params):
+        if len(params) not in (5, 6):
+            raise ValueError(
+                "mining.submit requires 5 or 6 parameters"
+            )
+
+        worker = params[0]
+        job_id = params[1]
+        extranonce2 = params[2]
+        ntime = params[3]
+        nonce = params[4]
+
+        version_bits = None
+        if len(params) == 6:
+            version_bits = params[5]
+
+        if job_id not in JOBS:
+            return False, [
+                21,
+                "Job not found",
+                None,
+            ]
+
+        stored = JOBS[job_id]
+        job = stored["job"]
+
+        if len(extranonce2) != EXTRANONCE2_SIZE * 2:
+            return False, [
+                20,
+                "Incorrect extranonce2 size",
+                None,
+            ]
+
+        try:
+            bytes.fromhex(extranonce2)
+            bytes.fromhex(ntime)
+            bytes.fromhex(nonce)
+        except ValueError:
+            return False, [
+                20,
+                "Invalid hexadecimal submit parameter",
+                None,
+            ]
+
+        if len(ntime) != 8 or len(nonce) != 8:
+            return False, [
+                20,
+                "ntime and nonce must be 4-byte hex values",
+                None,
+            ]
+
+        coinbase = bytes.fromhex(
+            job["coinbase1"]
+            + EXTRANONCE1.hex()
+            + extranonce2
+            + job["coinbase2"]
+        )
+
+        merkle_root = sha256d(coinbase)
+
+        if job["merkle_branch"]:
+            return False, [
+                20,
+                "Merkle branches not implemented in test bridge",
+                None,
+            ]
+
+        stratum_prevhash = bytes.fromhex(
+            job["prevhash"]
+        )
+
+        display_prevhash = b"".join(
+            stratum_prevhash[i:i+4]
+            for i in range(28, -1, -4)
+        )
+
+        header_prevhash = display_prevhash[::-1]
+
+        job_version = int(job["version"], 16)
+
+        if version_bits is not None:
+            try:
+                submitted_bits = int(version_bits, 16)
+            except ValueError:
+                return False, [
+                    20,
+                    "Invalid version_bits",
+                    None,
+                ]
+
+            if submitted_bits & ~VERSION_MASK:
+                return False, [
+                    20,
+                    "Version bits outside negotiated mask",
+                    None,
+                ]
+
+            header_version = (
+                (job_version & ~VERSION_MASK)
+                | (submitted_bits & VERSION_MASK)
+            )
+        else:
+            header_version = job_version
+
+        header = (
+            struct.pack("<I", header_version)
+            + header_prevhash
+            + merkle_root
+            + struct.pack("<I", int(ntime, 16))
+            + bytes.fromhex(job["nbits"])[::-1]
+            + struct.pack("<I", int(nonce, 16))
+        )
+
+        if len(header) != 80:
+            raise RuntimeError(
+                f"Unexpected header length: {len(header)}"
+            )
+
+        hash_internal = sha256d(header)
+        hash_display = hash_internal[::-1].hex()
+        hash_value = int.from_bytes(
+            hash_internal,
+            "little",
+        )
+
+        share_target = compact_to_target(
+            "1d00ffff"
+        )
+
+        network_target = compact_to_target(
+            job["nbits"]
+        )
+
+        meets_share = hash_value <= share_target
+        meets_network = hash_value <= network_target
+
+        print()
+        print("Galara mining.submit received")
+        print("worker:", worker)
+        print("job:", job_id)
+        print("extranonce2:", extranonce2)
+        print("ntime:", ntime)
+        print("nonce:", nonce)
+
+        if version_bits is not None:
+            print("version_bits:", version_bits)
+
+        print("candidate hash:", hash_display)
+        print("meets difficulty-1 share:", meets_share)
+        print("meets Galara network target:", meets_network)
+
+        if meets_network:
+            print(
+                "*** GALARA BLOCK CANDIDATE FOUND "
+                "(NOT SUBMITTED) ***"
+            )
+
+        if not meets_share:
+            return False, [
+                23,
+                "Low difficulty share",
+                None,
+            ]
+
+        return True, None
+
+    def handle(self):
+        print(f"Miner connected: {self.client_address}")
+
+        while True:
+            line = self.rfile.readline()
+
+            if not line:
+                break
+
+            try:
+                message = json.loads(
+                    line.decode().strip()
+                )
+                print("RX:", message)
+
+                request_id = message.get("id")
+                method = message.get("method")
+                params = message.get("params", [])
+
+                if method == "mining.configure":
+                    self.send_response(
+                        request_id,
+                        {
+                            "version-rolling": True,
+                            "version-rolling.mask":
+                                f"{VERSION_MASK:08x}",
+                        },
+                    )
+
+                elif method == "mining.subscribe":
+                    self.send_response(
+                        request_id,
+                        [
+                            [
+                                [
+                                    "mining.set_difficulty",
+                                    "galara-sub-1",
+                                ],
+                                [
+                                    "mining.notify",
+                                    "galara-sub-1",
+                                ],
+                            ],
+                            EXTRANONCE1.hex(),
+                            EXTRANONCE2_SIZE,
+                        ],
+                    )
+
+                elif method == "mining.authorize":
+                    self.send_response(
+                        request_id,
+                        True,
+                    )
+
+                    template = get_galara_template()
+                    job = build_job(template)
+
+                    JOBS[job["job_id"]] = {
+                        "job": job,
+                        "template": template,
+                    }
+
+                    self.send_notification(
+                        "mining.set_difficulty",
+                        [1],
+                    )
+
+                    self.send_notification(
+                        "mining.notify",
+                        [
+                            job["job_id"],
+                            job["prevhash"],
+                            job["coinbase1"],
+                            job["coinbase2"],
+                            job["merkle_branch"],
+                            job["version"],
+                            job["nbits"],
+                            job["ntime"],
+                            job["clean_jobs"],
+                        ],
+                    )
+
+                    print(
+                        "Sent Galara job:",
+                        job["job_id"],
+                        "height",
+                        template["height"],
+                    )
+
+                elif method == "mining.submit":
+                    accepted, error = self.verify_submit(
+                        params
+                    )
+
+                    self.send_response(
+                        request_id,
+                        accepted,
+                        error,
+                    )
+
+                elif method == "mining.suggest_difficulty":
+                    self.send_response(
+                        request_id,
+                        True,
+                    )
+
+                elif method == "mining.extranonce.subscribe":
+                    self.send_response(
+                        request_id,
+                        True,
+                    )
+
+                else:
+                    self.send_response(
+                        request_id,
+                        None,
+                        [
+                            20,
+                            f"Unsupported method: {method}",
+                            None,
+                        ],
+                    )
+
+            except Exception as exc:
+                print("ERROR:", exc)
+
+                try:
+                    self.send_response(
+                        message.get("id"),
+                        False,
+                        [
+                            20,
+                            str(exc),
+                            None,
+                        ],
+                    )
+                except Exception:
+                    pass
+
+        print(f"Miner disconnected: {self.client_address}")
+
+
+def main():
+    template = get_galara_template()
+
+    print("Galara template received")
+    print("height:", template["height"])
+    print("bits:", template["bits"])
+    print("coinbasevalue:", template["coinbasevalue"])
+
+    required = template.get(
+        "galara_required_coinbase_outputs",
+        []
+    )
+
+    print("required premine outputs:")
+    print(json.dumps(required, indent=2))
+
+    with socketserver.ThreadingTCPServer(
+        (STRATUM_HOST, STRATUM_PORT),
+        StratumHandler,
+    ) as server:
+        print(
+            f"Galara Stratum test server listening on "
+            f"{STRATUM_HOST}:{STRATUM_PORT}"
+        )
+
+        server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()
