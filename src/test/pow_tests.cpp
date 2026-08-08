@@ -352,7 +352,7 @@ BOOST_AUTO_TEST_CASE(galara_asert_activation)
     const auto& consensus = chain_params->GetConsensus();
     const CBlock& genesis = chain_params->GenesisBlock();
 
-    BOOST_CHECK_EQUAL(consensus.nASERTActivationHeight, 2);
+    BOOST_CHECK_EQUAL(consensus.nASERTActivationHeight, 3);
     BOOST_CHECK_EQUAL(consensus.nASERTHalfLife, 172800);
 
     CBlockIndex genesis_index{genesis};
@@ -383,12 +383,13 @@ BOOST_AUTO_TEST_CASE(galara_asert_activation)
         genesis.nBits,
         genesis.nBits));
 
-    // Build an ideal block 1 index and calculate block 2.
     CBlockIndex block1_index{block1};
     block1_index.pprev = &genesis_index;
     block1_index.nHeight = 1;
     block1_index.nBits = block1_bits;
 
+    // Block 2 deliberately retains the launch target. This prevents the
+    // artificial genesis-to-launch timestamp gap from affecting ASERT.
     CBlockHeader block2;
     block2.nTime =
         block1.nTime + consensus.nPowTargetSpacing;
@@ -397,24 +398,49 @@ BOOST_AUTO_TEST_CASE(galara_asert_activation)
         GetNextWorkRequired(&block1_index, &block2, consensus);
 
     BOOST_CHECK_EQUAL(block2_bits, consensus.nInitialPowBits);
+    BOOST_CHECK_EQUAL(block2_bits, block1_bits);
 
-    // ASERT permits per-block nBits changes during headers presync,
-    // provided the compact target itself is valid.
+    // ASERT is not active at height 2, so an arbitrary difficulty change
+    // must still be rejected by headers presync.
     arith_uint256 harder_target;
-    harder_target.SetCompact(block1_bits);
+    harder_target.SetCompact(block2_bits);
     harder_target >>= 1;
 
-    BOOST_CHECK(PermittedDifficultyTransition(
+    BOOST_CHECK(!PermittedDifficultyTransition(
         consensus,
         2,
         block1_bits,
         harder_target.GetCompact()));
 
-    // Invalid targets remain forbidden.
+    CBlockIndex block2_index{block2};
+    block2_index.pprev = &block1_index;
+    block2_index.nHeight = 2;
+    block2_index.nBits = block2_bits;
+
+    // Block 3 is the first ASERT-controlled block. With ideal block-1 to
+    // block-2 spacing, ASERT must preserve the launch target.
+    CBlockHeader block3;
+    block3.nTime =
+        block2.nTime + consensus.nPowTargetSpacing;
+
+    const uint32_t block3_bits =
+        GetNextWorkRequired(&block2_index, &block3, consensus);
+
+    BOOST_CHECK_EQUAL(block3_bits, consensus.nInitialPowBits);
+
+    // From height 3 onward, ASERT permits per-block difficulty changes
+    // during headers presync, provided the compact target is valid.
+    BOOST_CHECK(PermittedDifficultyTransition(
+        consensus,
+        3,
+        block2_bits,
+        harder_target.GetCompact()));
+
+    // Invalid targets remain forbidden after ASERT activation.
     BOOST_CHECK(!PermittedDifficultyTransition(
         consensus,
-        2,
-        block1_bits,
+        3,
+        block2_bits,
         UintToArith256(consensus.powLimit).GetCompact(true)));
 }
 

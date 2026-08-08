@@ -93,7 +93,7 @@ public:
         consensus.nPowTargetTimespan = 2016 * 3 * 60; // 2,016 blocks at 3 minutes
         consensus.nPowTargetSpacing = 3 * 60;
         consensus.nASERTHalfLife = 2 * 24 * 60 * 60; // two days
-        consensus.nASERTActivationHeight = 2;
+        consensus.nASERTActivationHeight = 3;
         consensus.nInitialPowBits = 0x1b014f8a; // ~50,000 difficulty
         consensus.nPremineHeight = 1;
         consensus.nPremineAmount = 700800 * COIN;
