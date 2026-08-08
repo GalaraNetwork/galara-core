@@ -456,7 +456,19 @@ class StratumHandler(socketserver.StreamRequestHandler):
         )
 
         meets_share = hash_value <= share_target
-        meets_network = hash_value <= network_target
+
+        test_force_network = (
+            os.environ.get(
+                "GALARA_STRATUM_TEST_FORCE_NETWORK",
+                "0",
+            )
+            == "1"
+        )
+
+        meets_network = (
+            hash_value <= network_target
+            or test_force_network
+        )
 
         print()
         print("Galara mining.submit received")
@@ -475,9 +487,78 @@ class StratumHandler(socketserver.StreamRequestHandler):
 
         if meets_network:
             print(
-                "*** GALARA BLOCK CANDIDATE FOUND "
-                "(NOT SUBMITTED) ***"
+                "*** GALARA NETWORK-TARGET "
+                "BLOCK CANDIDATE FOUND ***"
             )
+
+            block = build_block_candidate(
+                job,
+                stored["template"],
+                extranonce2,
+                ntime,
+                nonce,
+                version_bits,
+            )
+
+            proposal_result = rpc_call(
+                "getblocktemplate",
+                [{
+                    "mode": "proposal",
+                    "data": block.hex(),
+                    "rules": [
+                        "segwit",
+                        "galara-premine",
+                    ],
+                }]
+            )
+
+            print(
+                "galarad proposal result:",
+                proposal_result,
+            )
+
+            submit_enabled = (
+                os.environ.get(
+                    "GALARA_STRATUM_SUBMIT_BLOCKS",
+                    "0",
+                )
+                == "1"
+            )
+
+            if proposal_result is not None:
+                print(
+                    "BLOCK NOT SUBMITTED: "
+                    "proposal validation rejected it."
+                )
+
+            elif not submit_enabled:
+                print(
+                    "BLOCK NOT SUBMITTED: "
+                    "GALARA_STRATUM_SUBMIT_BLOCKS "
+                    "is disabled."
+                )
+
+            else:
+                submit_result = rpc_call(
+                    "submitblock",
+                    [block.hex()],
+                )
+
+                print(
+                    "galarad submitblock result:",
+                    submit_result,
+                )
+
+                if submit_result is None:
+                    print(
+                        "*** GALARA BLOCK SUBMITTED "
+                        "SUCCESSFULLY ***"
+                    )
+                else:
+                    print(
+                        "Galara block submission rejected:",
+                        submit_result,
+                    )
 
         if not meets_share:
             return False, [
