@@ -190,7 +190,25 @@ def build_coinbase_parts(template):
             premine_script,
         )
 
-    output_count = 1 + len(required)
+    witness_commitment_hex = template.get(
+        "default_witness_commitment"
+    )
+
+    if witness_commitment_hex:
+        witness_commitment = bytes.fromhex(
+            witness_commitment_hex
+        )
+
+        outputs += serialize_output(
+            0,
+            witness_commitment,
+        )
+
+    output_count = (
+        1
+        + len(required)
+        + (1 if witness_commitment_hex else 0)
+    )
 
     coinbase2 = (
         script_suffix
@@ -203,8 +221,45 @@ def build_coinbase_parts(template):
     return coinbase1.hex(), coinbase2.hex()
 
 
+def add_coinbase_witness(
+    stripped_coinbase,
+    reserved_value=None,
+):
+    if reserved_value is None:
+        reserved_value = bytes(32)
+
+    if len(reserved_value) != 32:
+        raise ValueError(
+            "Witness reserved value must be 32 bytes"
+        )
+
+    if len(stripped_coinbase) < 8:
+        raise ValueError(
+            "Coinbase serialization is unexpectedly short"
+        )
+
+    # SegWit serialization:
+    # version | marker | flag | vin/vout |
+    # witness | locktime
+    return (
+        stripped_coinbase[:4]
+        + b"\x00\x01"
+        + stripped_coinbase[4:-4]
+        + b"\x01\x20"
+        + reserved_value
+        + stripped_coinbase[-4:]
+    )
+
+
 def build_job(template):
     coinbase1, coinbase2 = build_coinbase_parts(template)
+
+    merkle_branch = [
+        item.hex()
+        for item in build_coinbase_merkle_branch(
+            template
+        )
+    ]
 
     raw_prevhash = bytes.fromhex(
         template["previousblockhash"]
@@ -220,7 +275,7 @@ def build_job(template):
         "prevhash": stratum_prevhash,
         "coinbase1": coinbase1,
         "coinbase2": coinbase2,
-        "merkle_branch": [],
+        "merkle_branch": merkle_branch,
         "version": f"{template['version']:08x}",
         "nbits": template["bits"],
         "ntime": f"{template['curtime']:08x}",
@@ -231,6 +286,59 @@ def sha256d(data):
     return hashlib.sha256(
         hashlib.sha256(data).digest()
     ).digest()
+
+
+def build_coinbase_merkle_branch(template):
+    tx_hashes = [
+        bytes.fromhex(tx["txid"])[::-1]
+        for tx in template["transactions"]
+    ]
+
+    if not tx_hashes:
+        return []
+
+    # None represents the coinbase path at index 0.
+    level = [None] + tx_hashes
+    branch = []
+
+    while len(level) > 1:
+        # The coinbase path is always the left-most node.
+        if len(level) > 1:
+            branch.append(level[1])
+
+        next_level = []
+
+        if len(level) % 2:
+            level.append(level[-1])
+
+        for i in range(0, len(level), 2):
+            left = level[i]
+            right = level[i + 1]
+
+            if left is None or right is None:
+                next_level.append(None)
+            else:
+                next_level.append(
+                    sha256d(left + right)
+                )
+
+        level = next_level
+
+    return branch
+
+
+def apply_merkle_branch(
+    coinbase_hash,
+    branch,
+):
+    root = coinbase_hash
+
+    for sibling in branch:
+        root = sha256d(
+            root + sibling
+        )
+
+    return root
 
 
 def compact_to_target(bits_hex):
@@ -276,19 +384,20 @@ def build_block_candidate(
     nonce,
     version_bits=None,
 ):
-    coinbase = bytes.fromhex(
+    stripped_coinbase = bytes.fromhex(
         job["coinbase1"]
         + extranonce1.hex()
         + extranonce2
         + job["coinbase2"]
     )
 
-    merkle_root = sha256d(coinbase)
-
-    if job["merkle_branch"]:
-        raise RuntimeError(
-            "Merkle branches are not implemented yet"
-        )
+    merkle_root = apply_merkle_branch(
+        sha256d(stripped_coinbase),
+        [
+            bytes.fromhex(item)
+            for item in job["merkle_branch"]
+        ],
+    )
 
     stratum_prevhash = bytes.fromhex(
         job["prevhash"]
@@ -322,10 +431,17 @@ def build_block_candidate(
         + struct.pack("<I", int(nonce, 16))
     )
 
+    if template.get("default_witness_commitment"):
+        block_coinbase = add_coinbase_witness(
+            stripped_coinbase
+        )
+    else:
+        block_coinbase = stripped_coinbase
+
     block = (
         header
         + varint(1 + len(template["transactions"]))
-        + coinbase
+        + block_coinbase
     )
 
     for tx in template["transactions"]:
@@ -516,14 +632,13 @@ class StratumHandler(socketserver.StreamRequestHandler):
             + job["coinbase2"]
         )
 
-        merkle_root = sha256d(coinbase)
-
-        if job["merkle_branch"]:
-            return False, [
-                20,
-                "Merkle branches not implemented in test bridge",
-                None,
-            ]
+        merkle_root = apply_merkle_branch(
+            sha256d(coinbase),
+            [
+                bytes.fromhex(item)
+                for item in job["merkle_branch"]
+            ],
+        )
 
         stratum_prevhash = bytes.fromhex(
             job["prevhash"]
