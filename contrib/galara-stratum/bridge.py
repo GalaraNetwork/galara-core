@@ -219,6 +219,9 @@ def compact_to_target(bits_hex):
     return mantissa << (8 * (exponent - 3))
 
 JOBS = {}
+JOBS_LOCK = threading.Lock()
+JOB_REFRESH_SECONDS = 2
+
 EXTRANONCE1 = bytes.fromhex("00000001")
 VERSION_MASK = 0x1FFFE000
 
@@ -289,6 +292,13 @@ def build_block_candidate(
     return block
 
 class StratumHandler(socketserver.StreamRequestHandler):
+    def setup(self):
+        super().setup()
+        self.write_lock = threading.Lock()
+        self.stop_event = threading.Event()
+        self.refresh_thread = None
+        self.current_prevhash = None
+
     def send_response(self, request_id, result, error=None):
         response = {
             "id": request_id,
@@ -296,10 +306,11 @@ class StratumHandler(socketserver.StreamRequestHandler):
             "error": error,
         }
 
-        self.wfile.write(
-            (json.dumps(response) + "\n").encode()
-        )
-        self.wfile.flush()
+        with self.write_lock:
+            self.wfile.write(
+                (json.dumps(response) + "\n").encode()
+            )
+            self.wfile.flush()
 
     def send_notification(self, method, params):
         message = {
@@ -308,10 +319,85 @@ class StratumHandler(socketserver.StreamRequestHandler):
             "params": params,
         }
 
-        self.wfile.write(
-            (json.dumps(message) + "\n").encode()
+        with self.write_lock:
+            self.wfile.write(
+                (json.dumps(message) + "\n").encode()
+            )
+            self.wfile.flush()
+
+    def send_job(self, template):
+        job = build_job(template)
+
+        with JOBS_LOCK:
+            for stored in JOBS.values():
+                if (
+                    stored["template"]["previousblockhash"]
+                    != template["previousblockhash"]
+                ):
+                    stored["stale"] = True
+
+            JOBS[job["job_id"]] = {
+                "job": job,
+                "template": template,
+                "stale": False,
+            }
+
+        self.current_prevhash = template[
+            "previousblockhash"
+        ]
+
+        self.send_notification(
+            "mining.notify",
+            [
+                job["job_id"],
+                job["prevhash"],
+                job["coinbase1"],
+                job["coinbase2"],
+                job["merkle_branch"],
+                job["version"],
+                job["nbits"],
+                job["ntime"],
+                job["clean_jobs"],
+            ],
         )
-        self.wfile.flush()
+
+        print(
+            "Sent Galara job:",
+            job["job_id"],
+            "height",
+            template["height"],
+        )
+
+        return job
+
+    def job_refresh_loop(self):
+        while not self.stop_event.wait(
+            JOB_REFRESH_SECONDS
+        ):
+            try:
+                template = get_galara_template()
+
+                new_prevhash = template[
+                    "previousblockhash"
+                ]
+
+                if new_prevhash == self.current_prevhash:
+                    continue
+
+                print()
+                print(
+                    "New Galara chain tip detected:",
+                    new_prevhash,
+                )
+
+                self.send_job(template)
+
+            except Exception as exc:
+                if not self.stop_event.is_set():
+                    print(
+                        "Galara job refresh error:",
+                        exc,
+                    )
 
     def verify_submit(self, params):
         if len(params) not in (5, 6):
@@ -329,15 +415,24 @@ class StratumHandler(socketserver.StreamRequestHandler):
         if len(params) == 6:
             version_bits = params[5]
 
-        if job_id not in JOBS:
-            return False, [
-                21,
-                "Job not found",
-                None,
-            ]
+        with JOBS_LOCK:
+            stored = JOBS.get(job_id)
 
-        stored = JOBS[job_id]
-        job = stored["job"]
+            if stored is None:
+                return False, [
+                    21,
+                    "Job not found",
+                    None,
+                ]
+
+            if stored.get("stale", False):
+                return False, [
+                    21,
+                    "Stale job",
+                    None,
+                ]
+
+            job = stored["job"]
 
         if len(extranonce2) != EXTRANONCE2_SIZE * 2:
             return False, [
@@ -626,39 +721,26 @@ class StratumHandler(socketserver.StreamRequestHandler):
                     )
 
                     template = get_galara_template()
-                    job = build_job(template)
-
-                    JOBS[job["job_id"]] = {
-                        "job": job,
-                        "template": template,
-                    }
 
                     self.send_notification(
                         "mining.set_difficulty",
                         [1],
                     )
 
-                    self.send_notification(
-                        "mining.notify",
-                        [
-                            job["job_id"],
-                            job["prevhash"],
-                            job["coinbase1"],
-                            job["coinbase2"],
-                            job["merkle_branch"],
-                            job["version"],
-                            job["nbits"],
-                            job["ntime"],
-                            job["clean_jobs"],
-                        ],
-                    )
+                    self.send_job(template)
 
-                    print(
-                        "Sent Galara job:",
-                        job["job_id"],
-                        "height",
-                        template["height"],
-                    )
+                    if self.refresh_thread is None:
+                        self.refresh_thread = (
+                            threading.Thread(
+                                target=self.job_refresh_loop,
+                                daemon=True,
+                                name=(
+                                    "galara-job-refresh-"
+                                    f"{self.client_address[0]}"
+                                ),
+                            )
+                        )
+                        self.refresh_thread.start()
 
                 elif method == "mining.submit":
                     accepted, error = self.verify_submit(
@@ -710,6 +792,7 @@ class StratumHandler(socketserver.StreamRequestHandler):
                 except Exception:
                     pass
 
+        self.stop_event.set()
         print(f"Miner disconnected: {self.client_address}")
 
 
