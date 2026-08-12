@@ -251,7 +251,44 @@ def add_coinbase_witness(
     )
 
 
-def build_job(template):
+def template_fingerprint(template):
+    """Return a stable fingerprint for mining-relevant template data.
+
+    curtime is intentionally excluded so normal time movement does not
+    cause a new Stratum job every refresh interval.
+    """
+    payload = {
+        "height": template["height"],
+        "previousblockhash": template["previousblockhash"],
+        "version": template["version"],
+        "bits": template["bits"],
+        "coinbasevalue": template["coinbasevalue"],
+        "transactions": [
+            {
+                "txid": tx["txid"],
+                "hash": tx.get("hash"),
+            }
+            for tx in template["transactions"]
+        ],
+        "default_witness_commitment": template.get(
+            "default_witness_commitment"
+        ),
+        "galara_required_coinbase_outputs": template.get(
+            "galara_required_coinbase_outputs",
+            [],
+        ),
+    }
+
+    encoded = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def build_job(template, clean_jobs=True):
     coinbase1, coinbase2 = build_coinbase_parts(template)
 
     merkle_branch = [
@@ -270,8 +307,14 @@ def build_job(template):
         for i in range(28, -1, -4)
     ).hex()
 
+    fingerprint = template_fingerprint(template)
+
     return {
-        "job_id": f"galara-{template['height']}-{template['curtime']}",
+        "job_id": (
+            f"galara-{template['height']}-"
+            f"{template['curtime']}-"
+            f"{fingerprint[:8]}"
+        ),
         "prevhash": stratum_prevhash,
         "coinbase1": coinbase1,
         "coinbase2": coinbase2,
@@ -279,7 +322,7 @@ def build_job(template):
         "version": f"{template['version']:08x}",
         "nbits": template["bits"],
         "ntime": f"{template['curtime']:08x}",
-        "clean_jobs": True,
+        "clean_jobs": clean_jobs,
     }
 
 def sha256d(data):
@@ -456,6 +499,7 @@ class StratumHandler(socketserver.StreamRequestHandler):
         self.stop_event = threading.Event()
         self.refresh_thread = None
         self.current_prevhash = None
+        self.current_template_fingerprint = None
         self.extranonce1 = allocate_extranonce1()
 
         print(
@@ -491,8 +535,11 @@ class StratumHandler(socketserver.StreamRequestHandler):
             )
             self.wfile.flush()
 
-    def send_job(self, template):
-        job = build_job(template)
+    def send_job(self, template, clean_jobs=True):
+        job = build_job(
+            template,
+            clean_jobs=clean_jobs,
+        )
 
         with JOBS_LOCK:
             for stored in JOBS.values():
@@ -511,6 +558,9 @@ class StratumHandler(socketserver.StreamRequestHandler):
         self.current_prevhash = template[
             "previousblockhash"
         ]
+        self.current_template_fingerprint = (
+            template_fingerprint(template)
+        )
 
         self.send_notification(
             "mining.notify",
@@ -546,17 +596,43 @@ class StratumHandler(socketserver.StreamRequestHandler):
                 new_prevhash = template[
                     "previousblockhash"
                 ]
+                new_fingerprint = (
+                    template_fingerprint(template)
+                )
 
-                if new_prevhash == self.current_prevhash:
+                if new_prevhash != self.current_prevhash:
+                    print()
+                    print(
+                        "New Galara chain tip detected:",
+                        new_prevhash,
+                    )
+
+                    self.send_job(
+                        template,
+                        clean_jobs=True,
+                    )
+                    continue
+
+                if (
+                    new_fingerprint
+                    == self.current_template_fingerprint
+                ):
                     continue
 
                 print()
                 print(
-                    "New Galara chain tip detected:",
-                    new_prevhash,
+                    "Galara mining template changed "
+                    "on current chain tip"
+                )
+                print(
+                    "transactions:",
+                    len(template["transactions"]),
                 )
 
-                self.send_job(template)
+                self.send_job(
+                    template,
+                    clean_jobs=False,
+                )
 
             except Exception as exc:
                 if not self.stop_event.is_set():
@@ -962,6 +1038,13 @@ class StratumHandler(socketserver.StreamRequestHandler):
         print(f"Miner disconnected: {self.client_address}")
 
 
+class GalaraThreadingTCPServer(
+    socketserver.ThreadingTCPServer
+):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
 def main():
     template = get_galara_template()
 
@@ -978,7 +1061,7 @@ def main():
     print("required premine outputs:")
     print(json.dumps(required, indent=2))
 
-    with socketserver.ThreadingTCPServer(
+    with GalaraThreadingTCPServer(
         (STRATUM_HOST, STRATUM_PORT),
         StratumHandler,
     ) as server:
