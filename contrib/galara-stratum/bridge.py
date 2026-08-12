@@ -222,13 +222,30 @@ JOBS = {}
 JOBS_LOCK = threading.Lock()
 JOB_REFRESH_SECONDS = 2
 
-EXTRANONCE1 = bytes.fromhex("00000001")
+EXTRANONCE1_LOCK = threading.Lock()
+EXTRANONCE1_COUNTER = 1
 VERSION_MASK = 0x1FFFE000
+
+
+def allocate_extranonce1():
+    global EXTRANONCE1_COUNTER
+
+    with EXTRANONCE1_LOCK:
+        if EXTRANONCE1_COUNTER > 0xffffffff:
+            raise RuntimeError(
+                "Galara extranonce1 space exhausted"
+            )
+
+        value = EXTRANONCE1_COUNTER
+        EXTRANONCE1_COUNTER += 1
+
+    return value.to_bytes(4, "big")
 
 
 def build_block_candidate(
     job,
     template,
+    extranonce1,
     extranonce2,
     ntime,
     nonce,
@@ -236,7 +253,7 @@ def build_block_candidate(
 ):
     coinbase = bytes.fromhex(
         job["coinbase1"]
-        + EXTRANONCE1.hex()
+        + extranonce1.hex()
         + extranonce2
         + job["coinbase2"]
     )
@@ -298,6 +315,14 @@ class StratumHandler(socketserver.StreamRequestHandler):
         self.stop_event = threading.Event()
         self.refresh_thread = None
         self.current_prevhash = None
+        self.extranonce1 = allocate_extranonce1()
+
+        print(
+            "Assigned extranonce1",
+            self.extranonce1.hex(),
+            "to",
+            self.client_address,
+        )
 
     def send_response(self, request_id, result, error=None):
         response = {
@@ -461,7 +486,7 @@ class StratumHandler(socketserver.StreamRequestHandler):
 
         coinbase = bytes.fromhex(
             job["coinbase1"]
-            + EXTRANONCE1.hex()
+            + self.extranonce1.hex()
             + extranonce2
             + job["coinbase2"]
         )
@@ -591,6 +616,7 @@ class StratumHandler(socketserver.StreamRequestHandler):
             block = build_block_candidate(
                 job,
                 stored["template"],
+                self.extranonce1,
                 extranonce2,
                 ntime,
                 nonce,
@@ -709,7 +735,7 @@ class StratumHandler(socketserver.StreamRequestHandler):
                                     "galara-sub-1",
                                 ],
                             ],
-                            EXTRANONCE1.hex(),
+                            self.extranonce1.hex(),
                             EXTRANONCE2_SIZE,
                         ],
                     )
