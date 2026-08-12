@@ -90,6 +90,39 @@ def push_data(data):
     raise ValueError("push_data only supports short values")
 
 
+def encode_script_num(value):
+    if value < 0:
+        raise ValueError(
+            "Galara block height cannot be negative"
+        )
+
+    if value == 0:
+        return b""
+
+    result = bytearray()
+
+    while value:
+        result.append(value & 0xff)
+        value >>= 8
+
+    if result[-1] & 0x80:
+        result.append(0x00)
+
+    return bytes(result)
+
+
+def encode_bip34_height(height):
+    if height == 0:
+        return b"\x00"
+
+    if 1 <= height <= 16:
+        return bytes([0x50 + height])
+
+    return push_data(
+        encode_script_num(height)
+    )
+
+
 def serialize_output(value, script):
     return (
         struct.pack("<Q", value)
@@ -121,15 +154,7 @@ def build_coinbase_parts(template):
     miner_value = template["coinbasevalue"] - premine_value
 
     height = template["height"]
-
-    if height == 0:
-        height_script = b"\x00"
-    elif 1 <= height <= 16:
-        height_script = bytes([0x50 + height])
-    else:
-        raise RuntimeError(
-            "Temporary Stratum bridge only supports heights 0-16"
-        )
+    height_script = encode_bip34_height(height)
 
     script_prefix = (
         height_script
