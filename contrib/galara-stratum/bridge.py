@@ -396,6 +396,7 @@ def compact_to_target(bits_hex):
 
 JOBS = {}
 JOBS_LOCK = threading.Lock()
+MAX_STORED_JOBS = 64
 JOB_REFRESH_SECONDS = 2
 
 EXTRANONCE1_LOCK = threading.Lock()
