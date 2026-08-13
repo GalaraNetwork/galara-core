@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
 import hashlib
+from pathlib import Path
 import struct
 import threading
 import time
 import base64
 import json
 import os
+import secrets
 import socketserver
 import urllib.request
 
@@ -400,8 +402,58 @@ MAX_STORED_JOBS = 64
 JOB_REFRESH_SECONDS = 2
 
 EXTRANONCE1_LOCK = threading.Lock()
-EXTRANONCE1_COUNTER = 1
+EXTRANONCE1_STATE = os.path.expanduser(
+    "~/.galara-launch-test/stratum-extranonce1.state"
+)
 VERSION_MASK = 0x1FFFE000
+
+
+def load_extranonce1_counter():
+    try:
+        with open(
+            EXTRANONCE1_STATE,
+            "r",
+            encoding="utf-8",
+        ) as state_file:
+            value = int(state_file.read().strip(), 16)
+
+        if value < 0 or value > 0x100000000:
+            raise ValueError(
+                "Galara extranonce1 state is out of range"
+            )
+
+        return value
+
+    except FileNotFoundError:
+        # Start from a cryptographically random 31-bit position.
+        # Keeping the high bit clear guarantees at least 2^31
+        # allocations before exhaustion.
+        return secrets.randbits(31)
+
+
+EXTRANONCE1_COUNTER = load_extranonce1_counter()
+
+
+def persist_extranonce1_counter(value):
+    state_path = Path(EXTRANONCE1_STATE)
+    state_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    temp_path = state_path.with_suffix(
+        state_path.suffix + ".tmp"
+    )
+
+    temp_path.write_text(
+        f"{value:x}\n",
+        encoding="utf-8",
+    )
+
+    os.replace(
+        temp_path,
+        state_path,
+    )
 
 
 def allocate_extranonce1():
@@ -415,6 +467,10 @@ def allocate_extranonce1():
 
         value = EXTRANONCE1_COUNTER
         EXTRANONCE1_COUNTER += 1
+
+        persist_extranonce1_counter(
+            EXTRANONCE1_COUNTER
+        )
 
     return value.to_bytes(4, "big")
 
