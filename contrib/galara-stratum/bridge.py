@@ -401,6 +401,54 @@ JOBS_LOCK = threading.Lock()
 MAX_STORED_JOBS = 64
 JOB_REFRESH_SECONDS = 2
 
+
+def prune_jobs_locked(newest_job_id):
+    """Keep the Stratum job cache bounded.
+
+    JOBS_LOCK must already be held by the caller.
+    Stale jobs are removed first, oldest first. If the
+    cache is still too large, the oldest remaining jobs
+    are removed while preserving the newest job.
+    """
+
+    if len(JOBS) <= MAX_STORED_JOBS:
+        return
+
+    stale_jobs = sorted(
+        (
+            (job_id, stored)
+            for job_id, stored in JOBS.items()
+            if stored["stale"]
+            and job_id != newest_job_id
+        ),
+        key=lambda item: item[1]["created_at"],
+    )
+
+    for job_id, _stored in stale_jobs:
+        if len(JOBS) <= MAX_STORED_JOBS:
+            break
+
+        JOBS.pop(job_id, None)
+
+    if len(JOBS) <= MAX_STORED_JOBS:
+        return
+
+    oldest_jobs = sorted(
+        (
+            (job_id, stored)
+            for job_id, stored in JOBS.items()
+            if job_id != newest_job_id
+        ),
+        key=lambda item: item[1]["created_at"],
+    )
+
+    for job_id, _stored in oldest_jobs:
+        if len(JOBS) <= MAX_STORED_JOBS:
+            break
+
+        JOBS.pop(job_id, None)
+
+
 EXTRANONCE1_LOCK = threading.Lock()
 EXTRANONCE1_STATE = os.path.expanduser(
     "~/.galara-launch-test/stratum-extranonce1.state"
@@ -610,7 +658,12 @@ class StratumHandler(socketserver.StreamRequestHandler):
                 "job": job,
                 "template": template,
                 "stale": False,
+                "created_at": time.monotonic(),
             }
+
+            prune_jobs_locked(
+                job["job_id"]
+            )
 
         self.current_prevhash = template[
             "previousblockhash"
