@@ -865,26 +865,15 @@ class StratumHandler(socketserver.StreamRequestHandler):
             or test_force_network
         )
 
-        print()
-        print("Galara mining.submit received")
-        print("worker:", worker)
-        print("job:", job_id)
-        print("extranonce2:", extranonce2)
-        print("ntime:", ntime)
-        print("nonce:", nonce)
-
-        if version_bits is not None:
-            print("version_bits:", version_bits)
-
-        print("candidate hash:", hash_display)
-        print("meets configured share target:", meets_share)
-        print("meets Galara network target:", meets_network)
-
         if meets_network:
+            print()
             print(
                 "*** GALARA NETWORK-TARGET "
                 "BLOCK CANDIDATE FOUND ***"
             )
+            print("worker:", worker)
+            print("job:", job_id)
+            print("candidate hash:", hash_display)
 
             block = build_block_candidate(
                 job,
@@ -978,11 +967,12 @@ class StratumHandler(socketserver.StreamRequestHandler):
                 message = json.loads(
                     line.decode().strip()
                 )
-                print("RX:", message)
-
                 request_id = message.get("id")
                 method = message.get("method")
                 params = message.get("params", [])
+
+                if method != "mining.submit":
+                    print("RX:", message)
 
                 if method == "mining.configure":
                     self.send_response(
