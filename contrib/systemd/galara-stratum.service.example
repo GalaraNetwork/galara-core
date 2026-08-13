@@ -1,0 +1,39 @@
+# Galara Stratum bridge systemd example
+#
+# Replace:
+#   GALARA_USER
+#   GALARA_HOME
+#   GALARA_REPO
+#
+# GALARA_STRATUM_SUBMIT_BLOCKS=1 enables actual block submission.
+# Keep it disabled unless this bridge is intentionally operating
+# as an active Galara mining endpoint.
+
+[Unit]
+Description=Galara Stratum Bridge
+After=network-online.target galara-launch.service
+Wants=network-online.target
+Requires=galara-launch.service
+
+[Service]
+Type=simple
+User=GALARA_USER
+Group=GALARA_USER
+WorkingDirectory=GALARA_REPO
+
+Environment=GALARA_STRATUM_SUBMIT_BLOCKS=1
+Environment=PYTHONUNBUFFERED=1
+
+ExecStartPre=/bin/bash -c 'for i in {1..30}; do test -f GALARA_HOME/.galara-launch-test/.cookie && GALARA_REPO/build/bin/galara-cli -datadir=GALARA_HOME/.galara-launch-test -rpcport=29492 getblockcount >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1'
+
+ExecStart=/usr/bin/python3 \
+  GALARA_REPO/contrib/galara-stratum/bridge.py
+
+Restart=on-failure
+RestartSec=5
+
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

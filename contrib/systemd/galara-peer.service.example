@@ -1,0 +1,44 @@
+# Galara peer-node systemd example
+#
+# Replace:
+#   GALARA_USER
+#   GALARA_HOME
+#   GALARA_REPO
+#
+# This unit represents the isolated local peer used during Galara
+# launch/testing. It is not a public-network peer configuration.
+
+[Unit]
+Description=Galara Peer Node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=GALARA_USER
+Group=GALARA_USER
+
+ExecStart=GALARA_REPO/build/bin/galarad \
+  -datadir=GALARA_HOME/.galara-peer-test \
+  -port=29601 \
+  -rpcport=29602 \
+  -bind=127.0.0.1 \
+  -discover=0 \
+  -dnsseed=0 \
+  -connect=0 \
+  -server=1 \
+  -printtoconsole=1
+
+ExecStop=GALARA_REPO/build/bin/galara-cli \
+  -datadir=GALARA_HOME/.galara-peer-test \
+  -rpcport=29602 \
+  stop
+
+Restart=on-failure
+RestartSec=5
+
+TimeoutStopSec=120
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

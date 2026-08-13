@@ -1,0 +1,61 @@
+# Galara launch-node systemd example
+#
+# Replace:
+#   GALARA_USER
+#   GALARA_HOME
+#   GALARA_REPO
+#
+# IMPORTANT:
+# This is the isolated launch/mining configuration used during
+# Galara development. It is not intended to define the final
+# public-network node configuration.
+#
+# In particular:
+#   -listen=0
+#   -discover=0
+#   -dnsseed=0
+#   -connect=127.0.0.1:29601
+# isolate this node behind the local peer.
+#
+# -maxtipage=604800 is a launch/test convenience and should be
+# reviewed before production deployment.
+#
+# -fallbackfee=0.0001 is an operational wallet setting rather
+# than a consensus rule and should also be reviewed separately.
+
+[Unit]
+Description=Galara Launch Node
+After=network-online.target galara-peer.service
+Wants=network-online.target
+Requires=galara-peer.service
+
+[Service]
+Type=simple
+User=GALARA_USER
+Group=GALARA_USER
+
+ExecStart=GALARA_REPO/build/bin/galarad \
+  -datadir=GALARA_HOME/.galara-launch-test \
+  -rpcport=29492 \
+  -listen=0 \
+  -discover=0 \
+  -dnsseed=0 \
+  -connect=127.0.0.1:29601 \
+  -server=1 \
+  -maxtipage=604800 \
+  -fallbackfee=0.0001 \
+  -printtoconsole=1
+
+ExecStop=GALARA_REPO/build/bin/galara-cli \
+  -datadir=GALARA_HOME/.galara-launch-test \
+  -rpcport=29492 \
+  stop
+
+Restart=on-failure
+RestartSec=5
+
+TimeoutStopSec=120
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
