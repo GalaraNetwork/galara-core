@@ -1166,7 +1166,7 @@ def main():
         StratumHandler,
     ) as server:
         print(
-            f"Galara Stratum test server listening on "
+            f"Galara Stratum server listening on "
             f"{STRATUM_HOST}:{STRATUM_PORT}"
         )
 
