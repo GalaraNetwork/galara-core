@@ -211,12 +211,12 @@ public:
         consensus.CSVHeight = 1;
         consensus.SegwitHeight = 0;
         consensus.MinBIP9WarningHeight = 0;
-        consensus.powLimit = uint256{"00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
+        consensus.powLimit = uint256{"00000b8ef1000000000000000000000000000000000000000000000000000000"};
         consensus.nPowTargetTimespan = 2016 * 3 * 60; // 2,016 blocks at 3 minutes
         consensus.nPowTargetSpacing = 3 * 60;
         consensus.nASERTHalfLife = 2 * 24 * 60 * 60; // two days
         consensus.nASERTActivationHeight = 3;
-        consensus.nInitialPowBits = 0x1d00ffff; // easy Galara testnet launch target
+        consensus.nInitialPowBits = 0x1e0b8ef1; // easy Galara testnet launch target
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.enforce_BIP94 = false;
         consensus.fPowNoRetargeting = false;
@@ -249,10 +249,23 @@ public:
         m_assumed_blockchain_size = 0;
         m_assumed_chain_state_size = 0;
 
-        genesis = CreateGenesisBlock(1296688602, 414098458, 0x1d00ffff, 1, 50 * COIN);
+        const char* galara_testnet_genesis_msg =
+            "16/Aug/2026 Galara Testnet - Independent testing begins";
+        const CScript galara_testnet_genesis_script =
+            CScript() << OP_RETURN;
+
+        genesis = CreateGenesisBlock(
+            galara_testnet_genesis_msg,
+            galara_testnet_genesis_script,
+            1786918620,
+            1467599,
+            0x1e0b8ef1,
+            1,
+            50 * COIN);
+
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256{"000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"});
-        assert(genesis.hashMerkleRoot == uint256{"4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"});
+        assert(consensus.hashGenesisBlock == uint256{"0000015a20de47f9991c005549e1224cda9f599e7d708319a8924a5103ae0cf2"});
+        assert(genesis.hashMerkleRoot == uint256{"3fc33817a8b9e73c08a62a4f4f7911e7dce504c22e7890fdc4b419103ed9c4ae"});
 
         // Galara testnet seed nodes will be added after independent
         // Galara testnet nodes are deployed.
