@@ -211,12 +211,12 @@ public:
         consensus.CSVHeight = 1;
         consensus.SegwitHeight = 0;
         consensus.MinBIP9WarningHeight = 0;
-        consensus.powLimit = uint256{"00000b8ef1000000000000000000000000000000000000000000000000000000"};
+        consensus.powLimit = uint256{"00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
         consensus.nPowTargetTimespan = 2016 * 3 * 60; // 2,016 blocks at 3 minutes
         consensus.nPowTargetSpacing = 3 * 60;
         consensus.nASERTHalfLife = 2 * 24 * 60 * 60; // two days
         consensus.nASERTActivationHeight = 3;
-        consensus.nInitialPowBits = 0x1e0b8ef1; // easy Galara testnet launch target
+        consensus.nInitialPowBits = 0x1d00ffff; // ASERT-compatible Galara testnet launch target
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.enforce_BIP94 = false;
         consensus.fPowNoRetargeting = false;
@@ -257,14 +257,14 @@ public:
         genesis = CreateGenesisBlock(
             galara_testnet_genesis_msg,
             galara_testnet_genesis_script,
-            1786918620,
-            1467599,
-            0x1e0b8ef1,
+            1786918621,
+            77312931,
+            0x1d00ffff,
             1,
             50 * COIN);
 
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256{"0000015a20de47f9991c005549e1224cda9f599e7d708319a8924a5103ae0cf2"});
+        assert(consensus.hashGenesisBlock == uint256{"000000007c1ad2c2d90adda5fac8d523a97112d34332a953febba17fd4c4f5ff"});
         assert(genesis.hashMerkleRoot == uint256{"3fc33817a8b9e73c08a62a4f4f7911e7dce504c22e7890fdc4b419103ed9c4ae"});
 
         // Galara testnet seed nodes will be added after independent

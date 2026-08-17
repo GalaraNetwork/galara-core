@@ -217,6 +217,13 @@ void sanity_check_chainparams(const ArgsManager& args, ChainType chain_type)
         targ_max /= consensus.nPowTargetTimespan*4;
         BOOST_CHECK(UintToArith256(consensus.powLimit) < targ_max);
     }
+
+    // CalculateASERT requires the highest 32 bits of powLimit to be zero.
+    // Keep this invariant covered by chain parameter sanity tests so an
+    // incompatible ASERT-enabled network cannot abort during block creation.
+    if (consensus.nASERTHalfLife > 0) {
+        BOOST_CHECK((UintToArith256(consensus.powLimit) >> 224) == 0);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(galara_asert_calculation)
