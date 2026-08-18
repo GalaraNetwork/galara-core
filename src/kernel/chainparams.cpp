@@ -267,9 +267,16 @@ public:
         assert(consensus.hashGenesisBlock == uint256{"000000007c1ad2c2d90adda5fac8d523a97112d34332a953febba17fd4c4f5ff"});
         assert(genesis.hashMerkleRoot == uint256{"3fc33817a8b9e73c08a62a4f4f7911e7dce504c22e7890fdc4b419103ed9c4ae"});
 
-        // Galara testnet seed nodes will be added after independent
-        // Galara testnet nodes are deployed.
-        vFixedSeeds.clear();
+        // Galara Testnet bootstrap node.
+        //
+        // BIP155 serialized endpoint:
+        // 107.205.210.9:39601
+        static constexpr uint8_t galara_testnet_fixed_seed[]{
+            0x01, 0x04, 0x6b, 0xcd, 0xd2, 0x09, 0x9a, 0xb1,
+        };
+        vFixedSeeds = std::vector<uint8_t>(
+            std::begin(galara_testnet_fixed_seed),
+            std::end(galara_testnet_fixed_seed));
         vSeeds.clear();
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,65);
