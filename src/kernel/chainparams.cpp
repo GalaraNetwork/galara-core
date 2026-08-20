@@ -272,7 +272,11 @@ public:
         // BIP155 serialized endpoint:
         // 107.205.210.9:39601
         static constexpr uint8_t galara_testnet_fixed_seed[]{
+            // Seed #1: 107.205.210.9:39601
             0x01, 0x04, 0x6b, 0xcd, 0xd2, 0x09, 0x9a, 0xb1,
+
+            // Seed #2: 97.241.193.100:39641
+            0x01, 0x04, 0x61, 0xf1, 0xc1, 0x64, 0x9a, 0xd9,
         };
         vFixedSeeds = std::vector<uint8_t>(
             std::begin(galara_testnet_fixed_seed),
