@@ -1,15 +1,14 @@
 # Galara Network and Consensus Specification
 
-**Document status:** Draft
+**Document status:** Implemented pre-release specification
 **Codebase:** Bitcoin Core v31.1
 **Network name:** Galara
 **Currency ticker:** GLRA
 
-This document defines the intended Galara network and consensus rules before
-those rules are implemented in source code.
+This document records the implemented Galara network and consensus rules.
 
-Consensus values must not be changed casually after the public network begins.
-Any value marked **TBD** remains undecided and must not be treated as final.
+Consensus values must not be changed casually. Consensus changes after public
+mainnet launch may require coordinated network upgrades or a hard fork.
 
 ## 1. Project identity
 
@@ -20,7 +19,7 @@ Any value marked **TBD** remains undecided and must not be treated as final.
 | Client name | Galara Core | Confirmed |
 | Source repository | GalaraNetwork/galara-core | Confirmed |
 | Upstream base | Bitcoin Core v31.1 | Confirmed |
-| Smallest unit | 0.00000001 GLRA | Proposed inherited behavior |
+| Smallest unit | 0.00000001 GLRA | Confirmed |
 
 ## 2. Proof of work
 
@@ -49,11 +48,11 @@ require merged mining with Bitcoin, Bloodstone, Stone, or another blockchain.
 At a target spacing of 180 seconds, 700,800 blocks equal 1,460 days,
 which is approximately four years.
 
-### Proposed subsidy schedule
+### Subsidy schedule
 
 | Era | Starting height | Subsidy |
 |---:|---:|---:|
-| 0 | 0 or post-premine start | 50 GLRA |
+| 0 | 0 | 50 GLRA |
 | 1 | 700,800 | 25 GLRA |
 | 2 | 1,401,600 | 12.5 GLRA |
 | 3 | 2,102,400 | 6.25 GLRA |
@@ -61,8 +60,8 @@ which is approximately four years.
 | 5 | 3,504,000 | 1.5625 GLRA |
 | 6 | 4,204,800 | 0.78125 GLRA |
 
-The exact interaction between the premine height and the first subsidy era is
-still **TBD**.
+The one-time treasury premine is separate from the ordinary block subsidy.
+It occurs at block height 1 and does not alter the subsidy era boundaries.
 
 ## 4. Supply
 
@@ -74,69 +73,91 @@ Because block rewards are represented in integer base units and truncated after
 each halving, the exact maximum ordinary subsidy using Bitcoin-style integer
 arithmetic is approximately 70,079,999.922912 GLRA.
 
-### Proposed premine
+### Treasury premine
 
 | Property | Value | Status |
 |---|---:|---|
-| Proposed premine | 700,800 GLRA | Proposed |
-| Premine block height | TBD | Undecided |
-| Premine recipient script/address | TBD | Undecided |
-| Premine custody and disclosure policy | TBD | Undecided |
+| Premine amount | 700,800 GLRA | Confirmed |
+| Premine block height | 1 | Confirmed |
+| Premine recipient | Galara Network Treasury 2-of-3 native SegWit multisig | Confirmed |
+| Premine scriptPubKey | `00200f7f09c48be501a04d15a6553e7dfb4f9dec46972da5a1ea01e0fa41b7732c25` | Confirmed |
+
+The block-1 treasury payment is a separate one-time issuance and is enforced
+by consensus. Exactly one output must pay 700,800 GLRA to the configured
+treasury script.
 
 ### Total maximum supply
 
 The nominal rounded maximum is 70,780,800 GLRA.
 
-The approximate exact maximum, including the proposed premine, is
+The approximate exact maximum, including the treasury premine, is
 70,780,799.922912 GLRA.
 
 ## 5. Difficulty adjustment
 
 | Property | Value | Status |
 |---|---:|---|
-| Mainnet difficulty algorithm | TBD | Undecided |
-| Candidate algorithm | ASERT | Under consideration |
-| Emergency difficulty adjustment | TBD | Undecided |
-| Minimum-difficulty blocks on mainnet | Proposed disabled | Proposed |
-| Testnet minimum-difficulty behavior | TBD | Undecided |
-| Regtest difficulty behavior | Easy local mining | Expected |
+| Mainnet difficulty algorithm | ASERT | Confirmed |
+| ASERT half-life | 172,800 seconds (2 days) | Confirmed |
+| Target block spacing | 180 seconds (3 minutes) | Confirmed |
+| ASERT activation height | 3 | Confirmed |
+| Initial post-genesis difficulty bits | `0x1b014f8a` | Confirmed |
+| Emergency difficulty adjustment | None | Confirmed |
+| Minimum-difficulty blocks on mainnet | Disabled | Confirmed |
+| Testnet minimum-difficulty blocks | Disabled | Confirmed |
+| Regtest difficulty behavior | Easy local mining | Confirmed |
 
-The difficulty algorithm must be chosen before the genesis block and public
-network launch.
+Galara uses ASERT to adjust proof-of-work difficulty toward the target
+three-minute block interval. The configured ASERT half-life is two days.
 
-The chosen algorithm should:
+The ASERT implementation is intended to:
 
-- Respond safely to sudden hashrate changes.
-- Avoid long periods without blocks.
-- Avoid oscillation between difficulty levels.
-- Support a new network beginning with low and variable hashrate.
-- Remain understandable and testable.
+- Respond to sudden hashrate changes.
+- Recover from periods with little or no mining.
+- Adjust continuously rather than at large periodic retarget boundaries.
+- Support a new network with low and variable hashrate.
+- Remain deterministic and testable by every validating node.
+
+Physical Bitaxe mining validation confirmed that difficulty increased as rapid
+blocks were accepted after an extended period of low mining activity.
 
 ## 6. Genesis blocks
 
-A separate genesis block is required for every applicable network.
+### Mainnet genesis
 
-| Network | Genesis block | Status |
-|---|---|---|
-| Mainnet | TBD | Undecided |
-| Testnet | TBD | Undecided |
-| Signet | TBD | Undecided |
-| Regtest | TBD or inherited development structure | Undecided |
+| Property | Value |
+|---|---|
+| Timestamp message | `06/Aug/2026 Galara Network - A new chain begins` |
+| Output script | `OP_RETURN` |
+| Reward | 50 GLRA |
+| Time | 1786062300 |
+| Nonce | 1047001877 |
+| Difficulty bits | `0x1d00ffff` |
+| Version | 1 |
+| Merkle root | `196a88852b529de6fa784c49e0c53b7985d2a0437475a59aefde952e2c026303` |
+| Genesis hash | `000000001c00b80243bd1bcfd7a4ee9711707bfd4bd3bbd292792ec87538dff3` |
 
-Required mainnet genesis inputs:
+The mainnet genesis output is intentionally unspendable. The treasury premine
+is separate and occurs at block height 1.
 
-- Human-readable timestamp message
-- Genesis output public key or script
-- Genesis reward policy
-- Block timestamp
-- Nonce
-- Difficulty bits
-- Version
-- Merkle root
-- Genesis block hash
+### Testnet genesis
 
-The genesis block must not be generated until the timestamp message, output
-script, initial difficulty, and network identity values are final.
+Galara Testnet uses its own independent genesis block and network identity.
+
+| Property | Value |
+|---|---|
+| Timestamp message | `16/Aug/2026 Galara Testnet - Independent testing begins` |
+| Output script | `OP_RETURN` |
+| Reward | 50 GLRA |
+| Time | 1786918621 |
+| Nonce | 77312931 |
+| Difficulty bits | `0x1d00ffff` |
+| Version | 1 |
+| Merkle root | `3fc33817a8b9e73c08a62a4f4f7911e7dce504c22e7890fdc4b419103ed9c4ae` |
+| Genesis hash | `000000007c1ad2c2d90adda5fac8d523a97112d34332a953febba17fd4c4f5ff` |
+
+Signet and regtest retain development-oriented inherited structures unless
+changed separately in source.
 
 ## 7. Network identity
 
@@ -235,86 +256,91 @@ ports, message-start bytes, Bech32 HRP, and chain data remain separate.
 
 ## 9. Consensus deployments and activations
 
-Bitcoin Core v31.1 contains inherited consensus rules and deployment
-infrastructure. Galara must decide whether features are active from genesis or
-activated at defined heights.
+Galara mainnet uses the following activation settings:
 
-Items requiring review include:
+| Rule | Mainnet setting |
+|---|---|
+| BIP34 | Height 1 |
+| BIP65 CHECKLOCKTIMEVERIFY | Height 1 |
+| BIP66 strict DER signatures | Height 1 |
+| CSV | Height 1 |
+| SegWit | Height 0 |
+| Taproot | Always active from launch |
+| TESTDUMMY deployment | Never active |
+| Minimum BIP9 warning height | 0 |
 
-- BIP34 height in coinbase
-- BIP65 CHECKLOCKTIMEVERIFY
-- BIP66 strict DER signatures
-- CSV
-- SegWit
-- Taproot
-- Minimum chain work
-- Assume-valid block
-- Version-bits deployment settings
-- Buried deployment heights
+Taproot uses the inherited version-bits deployment structure but is configured
+`ALWAYS_ACTIVE` with minimum activation height 0.
 
-Preferred direction:
+The TESTDUMMY deployment remains present for development infrastructure but is
+configured `NEVER_ACTIVE`.
 
-Modern, established Bitcoin consensus features active from genesis where safe.
+## 10. Chain safety and bootstrap values
 
-Exact values remain **TBD** until source locations and testing requirements are
-reviewed.
-
-## 10. Chain safety values
-
-| Property | Value | Status |
+| Property | Current mainnet value | Status |
 |---|---:|---|
-| Minimum chain work | Zero during private development | Proposed |
-| Assume-valid block | Null during private development | Proposed |
-| DNS seeds | None initially | Proposed |
-| Fixed seeds | None initially | Proposed |
-| Checkpoints | Genesis only initially | Proposed |
+| Minimum chain work | Zero | Current pre-release value |
+| Assume-valid block | Null | Current pre-release value |
+| DNS seeds | None | Current pre-release value |
+| Fixed seeds | None | Current pre-release value |
 
-These values must be updated as the public network develops.
+These are operational bootstrap and chain-safety values rather than monetary
+consensus parameters. They should be reviewed and updated as Galara mainnet
+accumulates stable public history and independent nodes.
 
-## 11. Premine policy requirements
+## 11. Treasury premine policy
 
-Before a premine is implemented, the project must publish:
+Galara implements a one-time treasury premine with the following consensus
+properties:
 
-- Exact amount
-- Exact recipient address or output script
-- Block height and transaction method
-- Intended allocation
-- Custody arrangements
-- Spending transparency plan
-- Whether funds are locked, vested, multisignature-controlled, or immediately
-  spendable
+- Amount: 700,800 GLRA
+- Height: block 1
+- Destination: Galara Network Treasury
+- Custody: 2-of-3 native SegWit multisignature
+- ScriptPubKey:
+  `00200f7f09c48be501a04d15a6553e7dfb4f9dec46972da5a1ea01e0fa41b7732c25`
 
-The premine must be reproducible from source code and visible to every node.
+The treasury output is reproducible from source code and visible to every
+validating node.
 
-## 12. Implementation order
+Consensus validation requires the block-1 coinbase to contain exactly one
+output paying the full premine amount to the configured treasury script.
+Missing, redirected, incorrectly valued, or duplicated treasury outputs are
+invalid.
 
-Consensus implementation should occur in this order:
+## 12. Implementation and validation status
 
-1. Finalize this specification.
-2. Choose network ports and message-start bytes.
-3. Choose address and key prefixes.
-4. Finalize the subsidy and premine implementation.
-5. Select and document the difficulty algorithm.
-6. Decide inherited activation heights.
-7. Finalize the genesis timestamp and output script.
-8. Implement mainnet parameters.
-9. Implement testnet and regtest parameters.
-10. Generate and verify genesis blocks.
-11. Add consensus and chain-parameter tests.
-12. Perform clean builds and isolated-network testing.
-13. Launch a private multi-node development network.
-14. Perform public testnet testing.
-15. Consider mainnet launch only after testnet validation.
+The major Galara consensus implementation stages have been completed:
+
+1. Network ports and message-start bytes selected.
+2. Address and extended-key prefixes selected.
+3. Subsidy and halving schedule implemented.
+4. Block-1 treasury premine implemented and consensus-enforced.
+5. ASERT difficulty adjustment implemented.
+6. Mainnet activation heights configured.
+7. Mainnet genesis finalized and verified.
+8. Galara Testnet genesis finalized and verified.
+9. Consensus and chain-parameter tests added.
+10. Multi-node testnet synchronization verified.
+11. Public fixed-seed discovery and failover verified on Testnet.
+12. Galara Stratum V1 mining integration implemented.
+13. Physical Bitaxe mainnet mining and block submission verified.
+
+The remaining work before a formal release is release-readiness review,
+documentation cleanup, focused regression testing, build verification, and
+release-candidate tagging.
 
 ## 13. Decisions log
 
-| Date | Decision | Rationale |
+| Status | Decision | Rationale |
 |---|---|---|
-| TBD | SHA-256d proof of work | ASIC and Bitaxe compatibility |
-| TBD | 180-second target spacing | Faster confirmation than Bitcoin while retaining proof of work |
-| TBD | 50 GLRA initial subsidy | Familiar Bitcoin-style initial emission |
-| TBD | 700,800-block halving | Approximately four years at 180-second blocks |
-| TBD | 700,800 GLRA premine | Proposed project and ecosystem allocation |
+| Confirmed | SHA-256d proof of work | ASIC and Bitaxe compatibility |
+| Confirmed | 180-second target spacing | Faster confirmation than Bitcoin while retaining proof of work |
+| Confirmed | 50 GLRA initial subsidy | Bitcoin-style declining block subsidy |
+| Confirmed | 700,800-block halving | Approximately four years at 180-second blocks |
+| Confirmed | 700,800 GLRA treasury premine | One-time Galara Network Treasury allocation |
+| Confirmed | Two-day ASERT half-life | Continuous difficulty response to changing hashrate |
+| Confirmed | 2-of-3 native SegWit treasury custody | Reduces reliance on any single treasury key |
 
 ## 14. Source implementation inventory
 
